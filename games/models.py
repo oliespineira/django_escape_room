@@ -18,7 +18,7 @@ class Player(models.Model):
 
     name = models.CharField(max_length=100)
     experience_level= models.CharField(max_length=20, choices=EXPERIENCE_CHOICES)
-    hint-preference=models.CharField(max_length=20, choices=HINT_CHOICES)
+    hint_preference=models.CharField(max_length=20, choices=HINT_CHOICES)
 
     def __str__(self):
         return self.name
@@ -26,7 +26,7 @@ class Player(models.Model):
 class Team(models.Model):
     name = models.CharField(max_length=100)
     players =models.ManyToManyField(Player)
-    created_at = models.DateTimeField(aouto_now_add= True)
+    created_at = models.DateTimeField(auto_now_add= True)
 
     def __str__(self):
         return self.name
