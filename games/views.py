@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from django.utils import timezone
 from .models import *
 from .serializers import *
+from django.http import JsonResponse
+from .intelligence import QueueManager, HintRecommender
 
 # Create your views here.
 class GameSessionViewSet(viewsets.ModelViewSet):
@@ -51,5 +53,26 @@ class TeamViewSet(viewsets.ModelViewSet):
     queryset = Team.objects.all()
     serializer_class = TeamSerializer
     
+def queue_view(request):
+    sessions = GameSession.objects.filter(active=True).select_related(
+        'team', 'room', 'current_puzzle'
+    )
+    manager = QueueManager()
+    recommender = HintRecommender()
+    ranked = manager.rank_sessions(list(sessions))
+    result = []
+    for session, score in ranked:
+        rec = recommender.suggest_hint(session)
+        result.append({
+            'session_id': session.id,
+            'team': session.team.name,
+            'room': session.room.name,
+            'current_puzzle': session.current_puzzle.name if session.current_puzzle else None,
+            'hints_given': session.hints_given,
+            'priority_score': round(score, 3),
+            'recommendation': rec,
+            'elapsed_minutes': int((timezone.now() - session.start_time).total_seconds() / 60),
+        })
+    return JsonResponse({'queue': result})
 
 

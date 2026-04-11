@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import GameSessionViewSet, PuzzleViewSet, TeamViewSet
+from .views import GameSessionViewSet, PuzzleViewSet, TeamViewSet, queue_view
 
 #Creates API generator
 router = DefaultRouter() #creates an object that will, collect all the APIs and generate URLs automatically
@@ -26,4 +26,7 @@ router.register(r'teams', TeamViewSet)
 #activates them
 urlpatterns = [
     path('', include(router.urls)),
+    path('queue/', queue_view)
+    
 ]
+
