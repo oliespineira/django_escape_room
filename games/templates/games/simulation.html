@@ -1,0 +1,86 @@
+{% extends "games/base.html" %}
+
+{% block title %}Simulation{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-1">Simulation mode</h1>
+<p class="text-muted small mb-4">Compare projected outcomes across hint strategies (synthetic Monte Carlo).</p>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="post" class="row g-3 align-items-end">
+      {% csrf_token %}
+      <div class="col-md-4">
+        <label class="form-label">Room</label>
+        <select name="room" class="form-select" required>
+          {% for r in rooms %}
+          <option value="{{ r.id }}"
+            {% if selected_room_id == r.id|stringformat:"s" %}selected{% elif not selected_room_id and forloop.first %}selected{% endif %}>{{ r.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Team (optional)</label>
+        <select name="team" class="form-select">
+          <option value="">— Random skill profile —</option>
+          {% for t in teams %}
+          <option value="{{ t.id }}" {% if selected_team_id == t.id|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Primary strategy</label>
+        <select name="strategy" class="form-select">
+          <option value="conservative" {% if selected_strategy == "conservative" %}selected{% endif %}>Conservative</option>
+          <option value="balanced" {% if selected_strategy == "balanced" or not selected_strategy %}selected{% endif %}>Balanced</option>
+          <option value="aggressive" {% if selected_strategy == "aggressive" %}selected{% endif %}>Aggressive</option>
+        </select>
+      </div>
+      <div class="col-md-1">
+        <button type="submit" class="btn btn-primary w-100">Run</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if results %}
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Primary run ({{ results.runs }} trials)</div>
+      <div class="card-body">
+        <p class="mb-2"><strong>{{ results.room }}</strong> · {{ results.difficulty }}</p>
+        <ul class="list-unstyled mb-0">
+          <li>Strategy: <code>{{ results.strategy }}</code></li>
+          <li>Projected success rate: <strong>{{ results.success_rate }}</strong></li>
+          <li>Avg hints: <strong>{{ results.avg_hints }}</strong></li>
+          <li>Avg duration: <strong>{{ results.avg_duration_minutes }} min</strong></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Side-by-side (40 trials each)</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Strategy</th><th>Success</th><th>Avg hints</th><th>Avg duration</th></tr></thead>
+          <tbody>
+            {% for c in compare %}
+            <tr>
+              <td><code>{{ c.strategy }}</code></td>
+              <td>{{ c.success_rate }}</td>
+              <td>{{ c.avg_hints }}</td>
+              <td>{{ c.avg_duration_minutes }} min</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% else %}
+<p class="text-muted small">Submit the form to see projected metrics.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,40 @@
+:root {
+  --eris-accent: #6f42c1;
+}
+
+.navbar-brand {
+  letter-spacing: 0.02em;
+}
+
+.card {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.04);
+}
+
+.badge-rec-hint {
+  background-color: #dc3545;
+}
+
+.badge-rec-monitor {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.badge-rec-wait {
+  background-color: #198754;
+}
+
+.table-eris th {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6c757d;
+}
+
+.timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.5rem;
+}

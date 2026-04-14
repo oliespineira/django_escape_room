@@ -1,0 +1,100 @@
+{% extends "games/base.html" %}
+
+{% block title %}Session {{ session.id }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h3 mb-0">Session #{{ session.id }}</h1>
+    <p class="text-muted small mb-0">{{ session.team.name }} · {{ session.room.name }}</p>
+  </div>
+  <div>
+    {% if session.active %}
+    <span class="badge text-bg-success">Active</span>
+    {% elif session.success %}
+    <span class="badge text-bg-primary">Escaped</span>
+    {% else %}
+    <span class="badge text-bg-secondary">Ended</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card"><div class="card-body py-3">
+      <div class="small text-muted">Duration</div>
+      <div class="fs-5 fw-semibold">{{ summary.duration_minutes }} min</div>
+    </div></div>
+  </div>
+  <div class="col-md-3">
+    <div class="card"><div class="card-body py-3">
+      <div class="small text-muted">Hints (session)</div>
+      <div class="fs-5 fw-semibold">{{ summary.hints_given }}</div>
+    </div></div>
+  </div>
+  <div class="col-md-3">
+    <div class="card"><div class="card-body py-3">
+      <div class="small text-muted">Room avg success</div>
+      <div class="fs-5 fw-semibold">{% if room_avg.success_rate is not None %}{{ room_avg.success_rate }}{% else %}—{% endif %}</div>
+    </div></div>
+  </div>
+  <div class="col-md-3">
+    <div class="card"><div class="card-body py-3">
+      <div class="small text-muted">Room avg hints</div>
+      <div class="fs-5 fw-semibold">{% if room_avg.avg_hints is not None %}{{ room_avg.avg_hints }}{% else %}—{% endif %}</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header fw-semibold">Puzzle timeline</div>
+      <div class="list-group list-group-flush">
+        {% for a in summary.attempts %}
+        <div class="list-group-item">
+          <div class="d-flex justify-content-between">
+            <div>
+              <span class="timeline-dot bg-primary"></span>
+              <strong>{{ a.puzzle }}</strong>
+              <span class="text-muted small">(order {{ a.order }})</span>
+            </div>
+            {% if a.duration_seconds is not None %}
+            <span class="font-monospace small">{{ a.duration_seconds }}s</span>
+            {% else %}
+            <span class="text-muted small">in progress</span>
+            {% endif %}
+          </div>
+          <div class="small text-muted ms-4">expected {{ a.expected_seconds }}s · hints on attempt {{ a.hints_used }}{% if not a.completed %} · not completed{% endif %}</div>
+        </div>
+        {% empty %}
+        <div class="list-group-item text-muted">No attempts recorded.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header fw-semibold">Hint events</div>
+      <ul class="list-group list-group-flush small">
+        {% for h in summary.hint_events %}
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between">
+            <span>{% if h.minute is not None %}+{{ h.minute }}m{% else %}—{% endif %}</span>
+            <span class="text-muted">{{ h.puzzle }}</span>
+          </div>
+          <div class="mt-1">{{ h.hint_text|default:"—" }}</div>
+          <div class="text-muted mt-1">auto={{ h.auto_suggested|yesno:"yes,no" }} · accepted={{ h.accepted|yesno:"yes,no" }}</div>
+        </li>
+        {% empty %}
+        <li class="list-group-item text-muted">No hints logged.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="mt-3">
+  <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">Back to dashboard</a>
+</div>
+{% endblock %}

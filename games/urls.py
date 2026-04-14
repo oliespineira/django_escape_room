@@ -1,32 +1,14 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import GameSessionViewSet, PuzzleViewSet, TeamViewSet, queue_view
+from django.urls import path
+from django.views.generic import RedirectView
 
-#Creates API generator
-router = DefaultRouter() #creates an object that will, collect all the APIs and generate URLs automatically
+from . import views
 
-'''Register endpoints: eg create an API at sessions using Game SessionViewSet
-
-example one line creates:
-GET     /sessions/        → list sessions
-GET     /sessions/1/      → get one session
-POST    /sessions/        → create session
-PATCH   /sessions/1/      → update session
-DELETE  /sessions/1/      → delete session
-POST    /sessions/1/hint/ → your custom action
-POST    /sessions/1/end/  → your custom action
-
-'''
-#defines endpoint
-router.register(r'sessions', GameSessionViewSet)
-router.register(r'puzzles', PuzzleViewSet)
-router.register(r'teams', TeamViewSet)
-
-
-#activates them
 urlpatterns = [
-    path('', include(router.urls)),
-    path('queue/', queue_view)
-    
+    path("", RedirectView.as_view(pattern_name="dashboard", permanent=False)),
+    path("dashboard/", views.dashboard_view, name="dashboard"),
+    path("analytics/", views.analytics_view, name="analytics"),
+    path("sessions/<int:pk>/", views.session_detail_view, name="session_detail"),
+    path("rooms/", views.room_list_view, name="room_list"),
+    path("rooms/<int:pk>/", views.room_detail_view, name="room_detail"),
+    path("simulation/", views.simulation_view, name="simulation"),
 ]
-

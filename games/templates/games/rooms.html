@@ -1,0 +1,30 @@
+{% extends "games/base.html" %}
+
+{% block title %}Rooms{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">Rooms</h1>
+<div class="row g-3">
+  {% for room, score in rooms_with_scores %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h2 class="h5 card-title">{{ room.name }}</h2>
+        <p class="small text-muted mb-2">{{ room.theme }} · {{ room.get_difficulty_display }} · {{ room.max_time }} min</p>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small">Balance</span>
+          <span class="badge text-bg-primary">{{ score.balance_score }}</span>
+        </div>
+        {% widthratio score.balance_score 1 100 as balance_pct %}
+        <div class="progress mb-3" style="height: 6px;">
+          <div class="progress-bar" style="width: {{ balance_pct }}%;"></div>
+        </div>
+        <a href="{% url 'room_detail' room.pk %}" class="btn btn-sm btn-outline-primary">View analytics</a>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <p class="text-muted">No rooms yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

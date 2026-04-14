@@ -16,6 +16,19 @@ class PuzzleSerializer(serializers.ModelSerializer):
         model = Puzzle
         fields = '__all__'
 
+
+class EscapeRoomSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EscapeRoom
+        fields = '__all__'
+
+
+class PuzzleAttemptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PuzzleAttempt
+        fields = '__all__'
+
+
 class GameSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = GameSession
