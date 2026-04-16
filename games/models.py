@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 # Create your models here.
 
@@ -66,16 +67,42 @@ class GameSession(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     room = models.ForeignKey(EscapeRoom, on_delete=models.CASCADE)
 
-    start_time = models.DateTimeField(auto_now_add=True)
+    start_time = models.DateTimeField(null=True, blank=True)  # before this was auto and now it is only filled out when GM presses Start
     end_time = models.DateTimeField(null=True, blank=True)
 
     success = models.BooleanField(null=True, blank=True)
-    active = models.BooleanField(default=True)
+    active = models.BooleanField(default=False)  #  session doesn't begin until GM presses start
+    paused_at = models.DateTimeField(null=True, blank=True)  # moments when sessioned paused
+    paused_duration = models.IntegerField(default=0)  # seconds accumulated during the pause
 
     current_puzzle = models.ForeignKey(Puzzle, on_delete=models.SET_NULL, null=True, blank=True)
 
     last_hint_time = models.DateTimeField(null=True, blank=True)
     hints_given = models.IntegerField(default=0)
+
+    STATUS_PENDING = 'pending'
+    STATUS_ACTIVE  = 'active'
+    STATUS_PAUSED  = 'paused'
+    STATUS_ENDED   = 'ended'
+
+    @property
+    def status(self):
+        if self.end_time:
+            return self.STATUS_ENDED
+        if self.paused_at:
+            return self.STATUS_PAUSED
+        if self.start_time:
+            return self.STATUS_ACTIVE
+        return self.STATUS_PENDING
+
+    @property
+    def elapsed_seconds(self):
+        """Tiempo real transcurrido, descontando pausas."""
+        if not self.start_time:
+            return 0
+        end = self.end_time or (self.paused_at if self.paused_at else timezone.now())
+        total = (end - self.start_time).total_seconds()
+        return max(0, int(total - self.paused_duration))
 
     def __str__(self):
         return f"{self.team.name} in {self.room.name}"
@@ -84,7 +111,7 @@ class PuzzleAttempt(models.Model):
     session = models.ForeignKey(GameSession, on_delete=models.CASCADE)
     puzzle = models.ForeignKey(Puzzle, on_delete=models.CASCADE)
 
-    start_time = models.DateTimeField(auto_now_add=True)
+    start_time = models.DateTimeField(default=timezone.now)
     end_time = models.DateTimeField(null=True, blank=True)
 
     hints_used = models.IntegerField(default=0)

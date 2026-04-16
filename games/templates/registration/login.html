@@ -8,12 +8,12 @@
       <div class="card bg-dark border-secondary shadow">
         <div class="card-body p-4">
           <h3 class="card-title text-center text-light mb-4">
-            🔐 ERIS — GM Login
+            Game Master Login
           </h3>
 
           {% if form.errors %}
           <div class="alert alert-danger">
-            Usuario o contraseña incorrectos.
+            Incorrect Username or Password.
           </div>
           {% endif %}
 
@@ -22,7 +22,7 @@
             <input type="hidden" name="next" value="{{ next }}">
 
             <div class="mb-3">
-              <label for="id_username" class="form-label text-light">Usuario</label>
+              <label for="id_username" class="form-label text-light">Username</label>
               <input
                 type="text"
                 name="username"
@@ -34,7 +34,7 @@
             </div>
 
             <div class="mb-3">
-              <label for="id_password" class="form-label text-light">Contraseña</label>
+              <label for="id_password" class="form-label text-light">Password</label>
               <input
                 type="password"
                 name="password"
@@ -46,7 +46,7 @@
 
             <div class="d-grid mt-4">
               <button type="submit" class="btn btn-primary">
-                Entrar al Dashboard
+                Enter Dashboard
               </button>
             </div>
           </form>
@@ -54,7 +54,7 @@
       </div>
 
       <p class="text-center text-muted mt-3 small">
-        Crea un GM con: <code>python manage.py createsuperuser</code>
+        create a Gamemaster with: <code>python manage.py createsuperuser</code>
       </p>
 
     </div>

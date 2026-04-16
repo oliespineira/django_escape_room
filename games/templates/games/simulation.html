@@ -80,6 +80,34 @@
     </div>
   </div>
 </div>
+
+{% if compare %}
+<div class="card mt-4">
+  <div class="card-header fw-semibold">📊 What this means</div>
+  <div class="card-body">
+    {% for c in compare %}
+    <div class="mb-3">
+      <strong>{{ c.strategy|title }}</strong> strategy:
+      {% if c.success_rate >= 0.7 %}
+        <span class="badge bg-success">High success ({{ c.success_rate }})</span>
+        — Teams are likely to escape. Fewer hints needed.
+      {% elif c.success_rate >= 0.5 %}
+        <span class="badge bg-warning text-dark">Moderate ({{ c.success_rate }})</span>
+        — About half of teams escape. Balanced intervention.
+      {% else %}
+        <span class="badge bg-danger">Low success ({{ c.success_rate }})</span>
+        — Most teams struggle. Consider more active hinting.
+      {% endif %}
+      Avg <strong>{{ c.avg_hints }}</strong> hints per session,
+      avg duration <strong>{{ c.avg_duration_minutes }} min</strong>
+      (room limit: {{ results.room }} allows up to
+      {% for r in rooms %}{% if r.name == results.room %}{{ r.max_time }}{% endif %}{% endfor %} min).
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {% else %}
 <p class="text-muted small">Submit the form to see projected metrics.</p>
 {% endif %}

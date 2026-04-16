@@ -1,7 +1,8 @@
 import json
+import logging
 
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -11,7 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import views as auth_views
 
 from .intelligence import FairnessEngine, HintRecommender, QueueManager, SimulationMode
-from .models import EscapeRoom, GameSession, HintEvent, Puzzle, PuzzleAttempt, Team
+from .models import EscapeRoom, GameSession, HintEvent, Player, Puzzle, PuzzleAttempt, Team
 from .serializers import GameSessionSerializer, PuzzleSerializer, TeamSerializer
 from .services.analytics import AnalyticsEngine
 
@@ -19,6 +20,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 
 # Create your views here.
+logger = logging.getLogger(__name__)
+
+
 class GameSessionViewSet(viewsets.ModelViewSet):
     authentication_classes = [SessionAuthentication, BasicAuthentication]
     permission_classes = [IsAuthenticated]
@@ -67,6 +71,137 @@ class GameSessionViewSet(viewsets.ModelViewSet):
         session.success = request.data.get('success', False)
         session.save()
         return Response({'status': 'session ended'})
+    @action(detail=True, methods=['post'])
+    def start(self, request, pk=None):
+        """Start a pending or paused session."""
+        session = self.get_object()
+        if session.status == GameSession.STATUS_PAUSED:
+            # Resuming from pause — accumulate paused duration
+            paused_seconds = (timezone.now() - session.paused_at).total_seconds()
+            session.paused_duration += int(paused_seconds)
+            session.paused_at = None
+            session.active = True
+            session.save()
+            return Response({'status': 'resumed'})
+        if session.status == GameSession.STATUS_PENDING:
+            start_ts = timezone.now()
+            first_puzzle = Puzzle.objects.filter(room=session.room).order_by('order').first()
+            if not first_puzzle:
+                logger.warning(
+                    'Cannot start session %s: room %s has no puzzles',
+                    session.id,
+                    session.room_id,
+                )
+                return Response(
+                    {'detail': 'Cannot start session: this room has no puzzles configured.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            session.start_time = start_ts
+            session.active = True
+            session.current_puzzle = first_puzzle
+            session.save()
+
+            PuzzleAttempt.objects.get_or_create(
+                session=session,
+                puzzle=first_puzzle,
+                completed=False,
+                defaults={'start_time': start_ts},
+            )
+            logger.info(
+                'Session %s started on puzzle %s',
+                session.id,
+                first_puzzle.id,
+            )
+            return Response({'status': 'started', 'current_puzzle': first_puzzle.name})
+        return Response(
+            {'detail': 'Session is already active or ended.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    @action(detail=True, methods=['post'])
+    def complete_puzzle(self, request, pk=None):
+        """Mark current puzzle as completed and advance to the next one."""
+        session = self.get_object()
+        if session.status != GameSession.STATUS_ACTIVE:
+            return Response(
+                {'detail': 'Only active sessions can complete puzzles.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not session.current_puzzle:
+            return Response(
+                {'detail': 'No active puzzle to complete.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        current_puzzle = session.current_puzzle
+
+        # Mark current attempt as completed
+        attempt = PuzzleAttempt.objects.filter(
+            session=session,
+            puzzle=current_puzzle,
+            completed=False
+        ).order_by('-start_time').first()
+        now = timezone.now()
+        if not attempt:
+            # Recover gracefully if previous start failed to create attempt.
+            attempt = PuzzleAttempt.objects.create(
+                session=session,
+                puzzle=current_puzzle,
+                start_time=now,
+                completed=True,
+                end_time=now,
+            )
+            logger.warning(
+                'Recovered missing PuzzleAttempt for session %s puzzle %s during complete_puzzle',
+                session.id,
+                current_puzzle.id,
+            )
+        else:
+            attempt.completed = True
+            attempt.end_time = now
+            attempt.save()
+
+        # Find next puzzle in order
+        next_puzzle = Puzzle.objects.filter(
+            room=session.room,
+            order__gt=current_puzzle.order
+        ).order_by('order').first()
+
+        if next_puzzle:
+            session.current_puzzle = next_puzzle
+            session.save()
+            PuzzleAttempt.objects.get_or_create(
+                session=session,
+                puzzle=next_puzzle,
+                completed=False,
+                defaults={'start_time': now},
+            )
+            return Response({'status': 'advanced', 'next_puzzle': next_puzzle.name})
+        else:
+            # No more puzzles — session completed successfully
+            session.current_puzzle = None
+            session.active = False
+            session.end_time = timezone.now()
+            session.success = True
+            session.save()
+            return Response({'status': 'completed', 'next_puzzle': None})
+
+    @action(detail=True, methods=['post'])
+    def pause(self, request, pk=None):
+        """Pause an active session."""
+        session = self.get_object()
+        if session.status != GameSession.STATUS_ACTIVE:
+            return Response(
+                {'detail': 'Only active sessions can be paused.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        session.paused_at = timezone.now()
+        session.active = False
+        session.save()
+        return Response({'status': 'paused'})
+
+
 
 class PuzzleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -84,9 +219,9 @@ from rest_framework.permissions import IsAuthenticated
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])    
 def queue_view(request):
-    sessions = GameSession.objects.filter(active=True).select_related(
-        'team', 'room', 'current_puzzle'
-    )
+    sessions = GameSession.objects.exclude(
+        end_time__isnull=False
+    ).select_related('team', 'room', 'current_puzzle')
     manager = QueueManager()
     recommender = HintRecommender()
     fairness = FairnessEngine()
@@ -99,10 +234,12 @@ def queue_view(request):
             'team': session.team.name,
             'room': session.room.name,
             'current_puzzle': session.current_puzzle.name if session.current_puzzle else None,
+            'current_puzzle_order': session.current_puzzle.order if session.current_puzzle else None,
             'hints_given': session.hints_given,
             'priority_score': round(score, 3),
             'recommendation': rec,
-            'elapsed_minutes': int((timezone.now() - session.start_time).total_seconds() / 60),
+            'elapsed_minutes': int(session.elapsed_seconds / 60),
+            'status': session.status,
         })
     report = fairness.fairness_report()
     outliers = fairness.detect_outliers()
@@ -113,22 +250,48 @@ def queue_view(request):
 
 
 def _dashboard_queue_context():
-    sessions = GameSession.objects.filter(active=True).select_related(
-        'team', 'room', 'current_puzzle'
-    )
+    # Include pending and paused sessions too, not just active
+    sessions = GameSession.objects.exclude(
+        end_time__isnull=False
+    ).select_related('team', 'room', 'current_puzzle')
+
     manager = QueueManager()
     recommender = HintRecommender()
     fairness = FairnessEngine()
-    ranked = manager.rank_sessions(list(sessions))
+
+    # Only rank active sessions — pending/paused don't get a priority score
+    active_sessions = [s for s in sessions if s.status == GameSession.STATUS_ACTIVE]
+    ranked_active = manager.rank_sessions(active_sessions)
+
+    # Build rows: ranked active first, then paused, then pending
+    ranked_ids = [s.id for s, _ in ranked_active]
+    paused = [s for s in sessions if s.status == GameSession.STATUS_PAUSED]
+    pending = [s for s in sessions if s.status == GameSession.STATUS_PENDING]
+
     rows = []
-    for session, score in ranked:
+    for session, score in ranked_active:
         rec = recommender.suggest_hint(session)
         rows.append({
             'session': session,
             'priority_score': round(score, 3),
             'recommendation': rec,
-            'elapsed_minutes': int((timezone.now() - session.start_time).total_seconds() / 60),
+            'elapsed_minutes': int(session.elapsed_seconds / 60),
         })
+    for session in paused:
+        rows.append({
+            'session': session,
+            'priority_score': None,
+            'recommendation': {'action': 'wait', 'reason': 'Session paused'},
+            'elapsed_minutes': int(session.elapsed_seconds / 60),
+        })
+    for session in pending:
+        rows.append({
+            'session': session,
+            'priority_score': None,
+            'recommendation': {'action': 'wait', 'reason': 'Not started yet'},
+            'elapsed_minutes': 0,
+        })
+
     return {
         'queue_rows': rows,
         'fairness': fairness.fairness_report(),
@@ -253,3 +416,56 @@ def simulation_view(request):
         'selected_strategy': selected_strategy or 'balanced',
     })
 
+@login_required
+def setup_view(request):
+    """GM setup page — create teams and assign them to rooms before starting."""
+    rooms = EscapeRoom.objects.all().order_by('name')
+
+    if request.method == 'POST':
+        selected_room_ids = request.POST.getlist('rooms')
+        errors = []
+
+        for room_id in selected_room_ids:
+            try:
+                room = EscapeRoom.objects.get(pk=room_id)
+            except EscapeRoom.DoesNotExist:
+                continue
+
+            team_name = request.POST.get(f'team_name_{room_id}', '').strip()
+            player_names_raw = request.POST.get(f'players_{room_id}', '').strip()
+
+            if not team_name:
+                errors.append(f'Room "{room.name}" needs a team name.')
+                continue
+
+            # Create team
+            team = Team.objects.create(name=team_name)
+
+            # Create players — one name per line
+            if player_names_raw:
+                for line in player_names_raw.splitlines():
+                    name = line.strip()
+                    if name:
+                        player = Player.objects.create(
+                            name=name,
+                            experience_level='intermediate',
+                            hint_preference='normal',
+                        )
+                        team.players.add(player)
+
+            # Create session — pending, not started yet
+            GameSession.objects.create(
+                team=team,
+                room=room,
+                active=False,
+            )
+
+        if errors:
+            return render(request, 'games/setup.html', {
+                'rooms': rooms,
+                'errors': errors,
+            })
+
+        return redirect('dashboard')
+
+    return render(request, 'games/setup.html', {'rooms': rooms})

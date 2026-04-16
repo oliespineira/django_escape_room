@@ -1,0 +1,135 @@
+{% extends "games/base.html" %}
+
+{% block title %}Session Setup{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="h3 mb-0">Session Setup</h1>
+    <p class="text-muted small mb-0">Select rooms, create teams, then start sessions from the dashboard.</p>
+  </div>
+  <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">← Back to Dashboard</a>
+</div>
+
+{% if errors %}
+<div class="alert alert-danger">
+  <strong>Please fix the following:</strong>
+  <ul class="mb-0 mt-1">
+    {% for error in errors %}
+    <li>{{ error }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form method="post" id="setup-form">
+  {% csrf_token %}
+
+  <!-- Step 1: Select rooms -->
+  <div class="card mb-4">
+    <div class="card-header fw-semibold">
+      Step 1 — Select active rooms tonight
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        {% for room in rooms %}
+        <div class="col-md-4">
+          <div class="form-check card p-3 h-100 room-card" id="card-{{ room.id }}">
+            <input
+              class="form-check-input room-checkbox"
+              type="checkbox"
+              name="rooms"
+              value="{{ room.id }}"
+              id="room-{{ room.id }}"
+              data-room-id="{{ room.id }}"
+            >
+            <label class="form-check-label w-100" for="room-{{ room.id }}">
+              <div class="fw-semibold">{{ room.name }}</div>
+              <div class="small text-muted">{{ room.get_difficulty_display }} · {{ room.max_time }} min · {{ room.theme }}</div>
+            </label>
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-muted">No rooms found. Add rooms in <a href="/admin/">Admin</a> first.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Team details per room (shown dynamically) -->
+  <div id="team-forms">
+    {% for room in rooms %}
+    <div class="card mb-3 team-form d-none" id="team-form-{{ room.id }}">
+      <div class="card-header fw-semibold bg-primary text-white">
+        Step 2 — Team for: {{ room.name }}
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Team name <span class="text-danger">*</span></label>
+            <input
+              type="text"
+              name="team_name_{{ room.id }}"
+              class="form-control"
+              placeholder="e.g. The Detectives"
+            >
+          </div>
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">Player names <span class="text-muted fw-normal">(one per line, optional)</span></label>
+            <textarea
+              name="players_{{ room.id }}"
+              class="form-control"
+              rows="3"
+              placeholder="Alice&#10;Bob&#10;Carol"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Step 3: Submit -->
+  <div class="card" id="submit-card" style="display:none!important">
+    <div class="card-body d-flex align-items-center justify-content-between">
+      <div>
+        <strong>Ready?</strong>
+        <span class="text-muted small ms-2">Sessions will be created but <em>not started</em> — start each one individually from the dashboard.</span>
+      </div>
+      <button type="submit" class="btn btn-primary btn-lg">
+        ✅ Create sessions →
+      </button>
+    </div>
+  </div>
+
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const checkboxes = document.querySelectorAll('.room-checkbox');
+  const submitCard = document.getElementById('submit-card');
+
+  checkboxes.forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      const roomId = cb.dataset.roomId;
+      const teamForm = document.getElementById('team-form-' + roomId);
+      const roomCard = document.getElementById('card-' + roomId);
+
+      if (cb.checked) {
+        teamForm.classList.remove('d-none');
+        roomCard.classList.add('border-primary');
+      } else {
+        teamForm.classList.add('d-none');
+        roomCard.classList.remove('border-primary');
+      }
+
+      // Show submit button if at least one room is selected
+      const anyChecked = Array.from(checkboxes).some(function (c) { return c.checked; });
+      submitCard.style.setProperty('display', anyChecked ? 'block' : 'none', 'important');
+    });
+  });
+})();
+</script>
+{% endblock %}
