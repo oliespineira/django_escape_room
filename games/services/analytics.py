@@ -210,6 +210,7 @@ class AnalyticsEngine:
             "hints_given": session.hints_given,
             "attempts": [
                 {
+                    "puzzle_id": a.puzzle_id,
                     "puzzle": a.puzzle.name,
                     "order": a.puzzle.order,
                     "expected_seconds": a.puzzle.expected_time,

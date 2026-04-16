@@ -5,7 +5,54 @@ from typing import Any
 from django.db.models import Avg, Count, Min
 from django.utils import timezone
 
-from .models import EscapeRoom, GameSession, HintEvent, Puzzle, PuzzleAttempt, Team
+from .models import (
+    EscapeRoom,
+    GameSession,
+    HintEvent,
+    OutputAcquired,
+    Puzzle,
+    PuzzleAttempt,
+    Team,
+)
+
+
+def get_available_puzzles(session):
+    """
+    Returns puzzles in this session's room that are unlocked but not yet completed.
+
+    Dependencies with all_required=True: every listed output must be acquired (AND).
+    Dependencies with all_required=False: at least one of those outputs must be
+    acquired (OR among that set). Both rules apply when a puzzle mixes them.
+    Puzzles with no dependencies are always available.
+    """
+    completed_ids = PuzzleAttempt.objects.filter(
+        session=session, completed=True
+    ).values_list("puzzle_id", flat=True)
+
+    acquired_ids = set(
+        OutputAcquired.objects.filter(session=session).values_list("output_id", flat=True)
+    )
+
+    available = []
+    for puzzle in Puzzle.objects.filter(room=session.room).exclude(id__in=completed_ids):
+        deps = puzzle.dependencies.all()
+        if not deps.exists():
+            available.append(puzzle)
+        else:
+            and_ids = set()
+            or_ids = set()
+            for row in deps.values("requires_output_id", "all_required"):
+                oid = row["requires_output_id"]
+                if row["all_required"]:
+                    and_ids.add(oid)
+                else:
+                    or_ids.add(oid)
+
+            and_ok = and_ids.issubset(acquired_ids)
+            or_ok = not or_ids or bool(or_ids & acquired_ids)
+            if and_ok and or_ok:
+                available.append(puzzle)
+    return available
 
 class QueueManager:
     def __init__(self):
@@ -51,7 +98,7 @@ class QueueManager:
         expected = session.current_puzzle.expected_time
         if expected == 0:
             return 0
-        return max(0.0, (elapsed - expected) / expected)  # ← clamp: never negative
+        return max(0.0, (elapsed - expected) / expected)  # clamp: never negative
     def _fairness_deficit(self, session):
         avg = GameSession.objects.filter(active=True).aggregate(
             Avg('hints_given')

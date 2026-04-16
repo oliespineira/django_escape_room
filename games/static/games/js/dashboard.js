@@ -25,13 +25,32 @@
       .replace(/"/g, "&quot;");
   }
 
+  function renderPuzzleCell(item) {
+    const order = item.current_puzzle_order;
+    const name = item.current_puzzle || "—";
+    const title =
+      order != null && item.current_puzzle
+        ? "#" + order + " - " + escapeHtml(name)
+        : escapeHtml(name);
+    const available = item.available_puzzles || [];
+    const locked = item.locked_puzzles_count || 0;
+    let badges = available
+      .map(function (n) {
+        return '<span class="badge bg-secondary me-1">' + escapeHtml(n) + "</span>";
+      })
+      .join("");
+    if (locked > 0) {
+      badges +=
+        '<span class="badge bg-light text-muted border">' + locked + " locked</span>";
+    }
+    const sub = badges.length ? '<div class="small text-muted mt-1">' + badges + "</div>" : "";
+    return '<div class="fw-semibold">' + title + "</div>" + sub;
+  }
+
   function renderRow(item) {
     const rec = item.recommendation || {};
     const action = rec.action || "wait";
     const badge = badgeClass(action);
-    const puzzle = item.current_puzzle || "—";
-    const puzzleOrder = item.current_puzzle_order;
-    const puzzleLabel = puzzleOrder ? "#" + puzzleOrder + " - " + puzzle : puzzle;
     const status = item.status || "active";
 
     let rowClass = "";
@@ -49,14 +68,14 @@
     if (status === "pending") {
       elapsedCell = '<span class="badge bg-secondary">Not started</span>';
     } else if (status === "paused") {
-      elapsedCell = '<span class="badge bg-warning text-dark">⏸ Paused — ' + item.elapsed_minutes + " min</span>";
+      elapsedCell = '<span class="badge bg-warning text-dark">Paused &mdash; ' + item.elapsed_minutes + " min</span>";
     }
 
     let recCell = "";
     if (status === "active") {
       recCell =
         '<span class="badge ' + badge + ' fs-6">' +
-        (action === "hint" ? "🚨 HELP NOW" : action === "monitor" ? "👀 WATCH" : "✅ OK") +
+        (action === "hint" ? "HELP NOW" : action === "monitor" ? "WATCH" : "OK") +
         "</span>" +
         '<div class="small text-muted mt-1">' + escapeHtml(rec.reason || "") + "</div>";
     } else if (status === "pending") {
@@ -69,27 +88,27 @@
     if (status === "pending") {
       buttons =
         '<button class="btn btn-sm btn-success btn-session-action" ' +
-        'data-session-id="' + item.session_id + '" data-action="start">▶ Start</button>';
+        'data-session-id="' + item.session_id + '" data-action="start">Start</button>';
     } else if (status === "active") {
       buttons =
         '<button class="btn btn-sm btn-outline-warning btn-session-action me-1" ' +
-        'data-session-id="' + item.session_id + '" data-action="pause">⏸ Pause</button>' +
+        'data-session-id="' + item.session_id + '" data-action="pause">Pause</button>' +
         '<button class="btn btn-sm btn-outline-primary btn-give-hint me-1" ' +
         'data-session-id="' + item.session_id + '"' +
         (action !== "hint" ? ' style="opacity:0.4"' : "") +
-        ">💡 Hint</button>" +
+        ">Hint</button>" +
         '<button class="btn btn-sm btn-success btn-session-action me-1" ' +
-        'data-session-id="' + item.session_id + '" data-action="complete_puzzle">✅ Puzzle done</button>' +
+        'data-session-id="' + item.session_id + '" data-action="complete_puzzle">Puzzle done</button>' +
         '<button class="btn btn-sm btn-outline-danger btn-session-action" ' +
         'data-session-id="' + item.session_id + '" data-action="end" ' +
-        'data-confirm="End session for ' + escapeHtml(item.team) + '?">⏹ End</button>';
+        'data-confirm="End session for ' + escapeHtml(item.team) + '?">End</button>';
     } else if (status === "paused") {
       buttons =
         '<button class="btn btn-sm btn-success btn-session-action me-1" ' +
-        'data-session-id="' + item.session_id + '" data-action="start">▶ Resume</button>' +
+        'data-session-id="' + item.session_id + '" data-action="start">Resume</button>' +
         '<button class="btn btn-sm btn-outline-danger btn-session-action" ' +
         'data-session-id="' + item.session_id + '" data-action="end" ' +
-        'data-confirm="End session for ' + escapeHtml(item.team) + '?">⏹ End</button>';
+        'data-confirm="End session for ' + escapeHtml(item.team) + '?">End</button>';
     }
 
     return (
@@ -97,7 +116,7 @@
       '<td><a class="text-decoration-none fw-bold" href="/sessions/' + item.session_id + '/">' +
       escapeHtml(item.team) + '</a><div class="small text-muted">#' + item.session_id + "</div></td>" +
       "<td>" + escapeHtml(item.room) + "</td>" +
-      "<td>" + escapeHtml(puzzleLabel) + "</td>" +
+      "<td>" + renderPuzzleCell(item) + "</td>" +
       "<td>" + elapsedCell + "</td>" +
       "<td>" + item.hints_given + "</td>" +
       "<td>" + recCell + "</td>" +
@@ -116,7 +135,7 @@
         if (confirmMsg && !window.confirm(confirmMsg)) return;
         let body = {};
         if (action === "end") {
-          const success = window.confirm("Did the team escape successfully?\n\nOK = Yes ✅\nCancel = No ❌");
+          const success = window.confirm("Did the team escape successfully?\n\nOK = Yes\nCancel = No");
           body = { success: success };
         }
         btn.disabled = true;
@@ -147,15 +166,7 @@
               return {};
             });
           })
-          .then(function (payload) {
-            if (action === "complete_puzzle") {
-              const row = btn.closest("tr");
-              const puzzleCell = row ? row.children[2] : null;
-              if (puzzleCell && Object.prototype.hasOwnProperty.call(payload, "next_puzzle")) {
-                const nextLabel = payload.next_puzzle ? payload.next_puzzle : "—";
-                puzzleCell.textContent = nextLabel;
-              }
-            }
+          .then(function () {
             refresh();
           })
           .catch(function (err) {
@@ -164,7 +175,7 @@
             btn.textContent = err && err.message ? "Error" : "Error";
             window.setTimeout(function () {
               btn.classList.remove("btn-danger");
-              btn.textContent = action === "complete_puzzle" ? "✅ Puzzle done" : btn.textContent;
+              btn.textContent = action === "complete_puzzle" ? "Puzzle done" : btn.textContent;
             }, 1200);
           });
       });

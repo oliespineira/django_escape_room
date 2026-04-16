@@ -11,8 +11,23 @@ from rest_framework.response import Response
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import views as auth_views
 
-from .intelligence import FairnessEngine, HintRecommender, QueueManager, SimulationMode
-from .models import EscapeRoom, GameSession, HintEvent, Player, Puzzle, PuzzleAttempt, Team
+from .intelligence import (
+    FairnessEngine,
+    HintRecommender,
+    QueueManager,
+    SimulationMode,
+    get_available_puzzles,
+)
+from .models import (
+    EscapeRoom,
+    GameSession,
+    HintEvent,
+    OutputAcquired,
+    Player,
+    Puzzle,
+    PuzzleAttempt,
+    Team,
+)
 from .serializers import GameSessionSerializer, PuzzleSerializer, TeamSerializer
 from .services.analytics import AnalyticsEngine
 
@@ -85,7 +100,14 @@ class GameSessionViewSet(viewsets.ModelViewSet):
             return Response({'status': 'resumed'})
         if session.status == GameSession.STATUS_PENDING:
             start_ts = timezone.now()
-            first_puzzle = Puzzle.objects.filter(room=session.room).order_by('order').first()
+            available_puzzles = sorted(get_available_puzzles(session), key=lambda p: p.order)
+            first_puzzle = available_puzzles[0] if available_puzzles else None
+            if not first_puzzle:
+                first_puzzle = (
+                    Puzzle.objects.filter(room=session.room, dependencies__isnull=True)
+                    .order_by("order")
+                    .first()
+                )
             if not first_puzzle:
                 logger.warning(
                     'Cannot start session %s: room %s has no puzzles',
@@ -162,11 +184,11 @@ class GameSessionViewSet(viewsets.ModelViewSet):
             attempt.end_time = now
             attempt.save()
 
-        # Find next puzzle in order
-        next_puzzle = Puzzle.objects.filter(
-            room=session.room,
-            order__gt=current_puzzle.order
-        ).order_by('order').first()
+        for output in current_puzzle.outputs.all():
+            OutputAcquired.objects.get_or_create(session=session, output=output)
+
+        available_next = sorted(get_available_puzzles(session), key=lambda p: p.order)
+        next_puzzle = available_next[0] if available_next else None
 
         if next_puzzle:
             session.current_puzzle = next_puzzle
@@ -229,6 +251,9 @@ def queue_view(request):
     result = []
     for session, score in ranked:
         rec = recommender.suggest_hint(session)
+        available = get_available_puzzles(session)
+        completed_count = PuzzleAttempt.objects.filter(session=session, completed=True).count()
+        total = Puzzle.objects.filter(room=session.room).count()
         result.append({
             'session_id': session.id,
             'team': session.team.name,
@@ -240,6 +265,8 @@ def queue_view(request):
             'recommendation': rec,
             'elapsed_minutes': int(session.elapsed_seconds / 60),
             'status': session.status,
+            'available_puzzles': [p.name for p in available],
+            'locked_puzzles_count': max(0, total - len(available) - completed_count),
         })
     report = fairness.fairness_report()
     outliers = fairness.detect_outliers()
@@ -264,36 +291,56 @@ def _dashboard_queue_context():
     ranked_active = manager.rank_sessions(active_sessions)
 
     # Build rows: ranked active first, then paused, then pending
-    ranked_ids = [s.id for s, _ in ranked_active]
     paused = [s for s in sessions if s.status == GameSession.STATUS_PAUSED]
     pending = [s for s in sessions if s.status == GameSession.STATUS_PENDING]
 
     rows = []
     for session, score in ranked_active:
         rec = recommender.suggest_hint(session)
+        available = get_available_puzzles(session)
+        completed_count = PuzzleAttempt.objects.filter(session=session, completed=True).count()
+        total = Puzzle.objects.filter(room=session.room).count()
+        locked_count = max(0, total - len(available) - completed_count)
         rows.append({
             'session': session,
             'priority_score': round(score, 3),
             'recommendation': rec,
             'elapsed_minutes': int(session.elapsed_seconds / 60),
+            'available_puzzles': available,
+            'locked_puzzles_count': locked_count,
         })
     for session in paused:
+        available = get_available_puzzles(session)
+        completed_count = PuzzleAttempt.objects.filter(session=session, completed=True).count()
+        total = Puzzle.objects.filter(room=session.room).count()
+        locked_count = max(0, total - len(available) - completed_count)
         rows.append({
             'session': session,
             'priority_score': None,
             'recommendation': {'action': 'wait', 'reason': 'Session paused'},
             'elapsed_minutes': int(session.elapsed_seconds / 60),
+            'available_puzzles': available,
+            'locked_puzzles_count': locked_count,
         })
     for session in pending:
+        available = get_available_puzzles(session)
+        completed_count = PuzzleAttempt.objects.filter(session=session, completed=True).count()
+        total = Puzzle.objects.filter(room=session.room).count()
+        locked_count = max(0, total - len(available) - completed_count)
         rows.append({
             'session': session,
             'priority_score': None,
             'recommendation': {'action': 'wait', 'reason': 'Not started yet'},
             'elapsed_minutes': 0,
+            'available_puzzles': available,
+            'locked_puzzles_count': locked_count,
         })
+
+    available_puzzles = {row['session'].id: row['available_puzzles'] for row in rows}
 
     return {
         'queue_rows': rows,
+        'available_puzzles': available_puzzles,
         'fairness': fairness.fairness_report(),
         'fairness_outliers': fairness.detect_outliers(),
     }
@@ -352,12 +399,55 @@ def session_detail_view(request, pk):
     )
     engine = AnalyticsEngine()
     summary = engine.session_summary(session)
+
+    acquired_by_puzzle = {}
+    for oa in OutputAcquired.objects.filter(session=session).select_related('output'):
+        acquired_by_puzzle.setdefault(oa.output.puzzle_id, []).append(oa.output)
+
+    attempts_out = []
+    for a in summary['attempts']:
+        pid = a['puzzle_id']
+        outputs = acquired_by_puzzle.get(pid, [])
+        attempts_out.append({
+            **a,
+            'outputs_acquired': [
+                {'label': (o.label or o.output_value or '').strip()}
+                for o in outputs
+            ],
+        })
+    summary = {**summary, 'attempts': attempts_out}
+
+    completed_ids = set(
+        PuzzleAttempt.objects.filter(session=session, completed=True).values_list(
+            'puzzle_id', flat=True
+        )
+    )
+    available_ids = {p.id for p in get_available_puzzles(session)}
+
+    puzzle_graph = []
+    for puzzle in Puzzle.objects.filter(room=session.room).order_by('order').prefetch_related(
+        'dependencies', 'outputs', 'dependencies__requires_output'
+    ):
+        if puzzle.id in completed_ids:
+            status = 'completed'
+        elif puzzle.id in available_ids:
+            status = 'available'
+        else:
+            status = 'locked'
+        puzzle_graph.append({
+            'puzzle': puzzle,
+            'requires': [d.requires_output.label for d in puzzle.dependencies.all()],
+            'produces': [o.label for o in puzzle.outputs.all()],
+            'status': status,
+        })
+
     room_rows = {r['room_id']: r for r in engine.room_performance()}
     room_avg = room_rows.get(session.room_id, {})
     return render(request, 'games/session_detail.html', {
         'session': session,
         'summary': summary,
         'room_avg': room_avg,
+        'puzzle_graph': puzzle_graph,
     })
 
 @login_required
@@ -374,9 +464,21 @@ def room_detail_view(request, pk):
     room = get_object_or_404(EscapeRoom, pk=pk)
     engine = AnalyticsEngine()
     perf = next((r for r in engine.room_performance() if r['room_id'] == room.id), None)
-    puzzles = list(Puzzle.objects.filter(room=room).order_by('order'))
+    puzzles = list(
+        Puzzle.objects.filter(room=room)
+        .order_by('order')
+        .prefetch_related('dependencies__requires_output', 'outputs')
+    )
     puzzle_stats = {p['puzzle_id']: p for p in engine.puzzle_difficulty_report()}
-    puzzle_rows = [{'puzzle': p, 'stat': puzzle_stats.get(p.id)} for p in puzzles]
+    puzzle_rows = [
+        {
+            'puzzle': p,
+            'stat': puzzle_stats.get(p.id),
+            'requires': [d.requires_output.label for d in p.dependencies.all()],
+            'produces': [o.label for o in p.outputs.all()],
+        }
+        for p in puzzles
+    ]
     return render(request, 'games/room_detail.html', {
         'room': room,
         'perf': perf,

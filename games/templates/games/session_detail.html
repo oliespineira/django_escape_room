@@ -66,11 +66,48 @@
             {% endif %}
           </div>
           <div class="small text-muted ms-4">expected {{ a.expected_seconds }}s · hints on attempt {{ a.hints_used }}{% if not a.completed %} · not completed{% endif %}</div>
+          {% if a.outputs_acquired %}
+          <div class="ms-4 mt-2 d-flex flex-wrap gap-1">
+            {% for o in a.outputs_acquired %}
+            <span class="badge rounded-pill text-dark" style="background-color: #20c997;">{{ o.label }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
         </div>
         {% empty %}
         <div class="list-group-item text-muted">No attempts recorded.</div>
         {% endfor %}
       </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header fw-semibold">Puzzle dependency graph</div>
+      <ul class="list-group list-group-flush small">
+        {% for row in puzzle_graph %}
+        {% with p=row.puzzle %}
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+            <div>
+              <strong>{{ p.name }}</strong>
+              <div class="text-muted mt-1"><span class="text-body-secondary">Requires:</span> {% if row.requires %}{{ row.requires|join:", " }}{% else %}none{% endif %}</div>
+              <div class="text-muted"><span class="text-body-secondary">Produces:</span> {% if row.produces %}{{ row.produces|join:", " }}{% else %}none{% endif %}</div>
+            </div>
+            <div>
+              {% if row.status == "completed" %}
+              <span class="badge text-bg-success">Completed</span>
+              {% elif row.status == "available" %}
+              <span class="badge text-bg-primary">Available</span>
+              {% else %}
+              <span class="badge text-bg-secondary">Locked</span>
+              {% endif %}
+            </div>
+          </div>
+        </li>
+        {% endwith %}
+        {% empty %}
+        <li class="list-group-item text-muted">No puzzles in this room.</li>
+        {% endfor %}
+      </ul>
     </div>
   </div>
   <div class="col-lg-5">

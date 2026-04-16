@@ -46,16 +46,24 @@
                 <td>{{ row.session.room.name }}</td>
                 <td>
                   {% if row.session.current_puzzle %}
-                    #{{ row.session.current_puzzle.order }} - {{ row.session.current_puzzle.name }}
+                    <div class="fw-semibold">#{{ row.session.current_puzzle.order }} - {{ row.session.current_puzzle.name }}</div>
                   {% else %}
-                    —
+                    <div class="fw-semibold">—</div>
                   {% endif %}
+                  <div class="small text-muted mt-1">
+                    {% for p in row.available_puzzles %}
+                      <span class="badge bg-secondary me-1">{{ p.name }}</span>
+                    {% endfor %}
+                    {% if row.locked_puzzles_count > 0 %}
+                      <span class="badge bg-light text-muted border">{{ row.locked_puzzles_count }} locked</span>
+                    {% endif %}
+                  </div>
                 </td>
                 <td>
                   {% if row.session.status == 'pending' %}
                     <span class="badge bg-secondary">Not started</span>
                   {% elif row.session.status == 'paused' %}
-                    <span class="badge bg-warning text-dark">⏸ Paused</span>
+                    <span class="badge bg-warning text-dark">Paused</span>
                   {% else %}
                     {{ row.elapsed_minutes }} min
                   {% endif %}
@@ -64,11 +72,11 @@
                 <td>
                   {% if row.session.status == 'active' %}
                     {% if rec.action == "hint" %}
-                      <span class="badge bg-danger fs-6">🚨 HELP NOW</span>
+                      <span class="badge bg-danger fs-6">HELP NOW</span>
                     {% elif rec.action == "monitor" %}
-                      <span class="badge bg-warning text-dark fs-6">👀 WATCH</span>
+                      <span class="badge bg-warning text-dark fs-6">WATCH</span>
                     {% else %}
-                      <span class="badge bg-success fs-6">✅ OK</span>
+                      <span class="badge bg-success fs-6">OK</span>
                     {% endif %}
                     <div class="small text-muted mt-1">{{ rec.reason }}</div>
                   {% elif row.session.status == 'pending' %}
@@ -86,43 +94,43 @@
                       <button class="btn btn-sm btn-success btn-session-action"
                               data-session-id="{{ row.session.id }}"
                               data-action="start">
-                        ▶ Start
+                        Start
                       </button>
 
                     {% elif row.session.status == 'active' %}
                       <button class="btn btn-sm btn-outline-warning btn-session-action"
                               data-session-id="{{ row.session.id }}"
                               data-action="pause">
-                        ⏸ Pause
+                        Pause
                       </button>
                       <button class="btn btn-sm btn-outline-primary btn-give-hint"
                               data-session-id="{{ row.session.id }}"
                               {% if rec.action != 'hint' %}style="opacity:0.4"{% endif %}>
-                        💡 Hint
+                        Hint
                       </button>
                       <button class="btn btn-sm btn-success btn-session-action"
                               data-session-id="{{ row.session.id }}"
                               data-action="complete_puzzle">
-                        ✅ Puzzle done
+                        Puzzle done
                       </button>
                       <button class="btn btn-sm btn-outline-danger btn-session-action"
                               data-session-id="{{ row.session.id }}"
                               data-action="end"
                               data-confirm="End session for {{ row.session.team.name }}?">
-                        ⏹ End
+                        End
                       </button>
 
                     {% elif row.session.status == 'paused' %}
                       <button class="btn btn-sm btn-success btn-session-action"
                               data-session-id="{{ row.session.id }}"
                               data-action="start">
-                        ▶ Resume
+                        Resume
                       </button>
                       <button class="btn btn-sm btn-outline-danger btn-session-action"
                               data-session-id="{{ row.session.id }}"
                               data-action="end"
                               data-confirm="End session for {{ row.session.team.name }}?">
-                        ⏹ End
+                        End
                       </button>
                     {% endif %}
 

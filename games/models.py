@@ -133,3 +133,48 @@ class HintEvent(models.Model):
 
     def __str__(self):
         return f"Hint for {self.session.team.name} at {self.timestamp}"
+
+
+class PuzzleOutput(models.Model):
+    OUTPUT_TYPES = [
+        ("code", "Numeric/text code"),
+        ("key", "Physical key"),
+        ("item", "Item or object"),
+        ("info", "Information / clue"),
+    ]
+
+    puzzle = models.ForeignKey(Puzzle, on_delete=models.CASCADE, related_name="outputs")
+    output_type = models.CharField(max_length=20, choices=OUTPUT_TYPES)
+    output_value = models.CharField(max_length=100)
+    label = models.CharField(max_length=200)
+
+    def __str__(self):
+        return f"{self.puzzle.name} -> {self.label}"
+
+
+class PuzzleDependency(models.Model):
+    puzzle = models.ForeignKey(Puzzle, on_delete=models.CASCADE, related_name="dependencies")
+    requires_output = models.ForeignKey(
+        PuzzleOutput, on_delete=models.CASCADE, related_name="unlocks"
+    )
+    all_required = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ("puzzle", "requires_output")
+
+    def __str__(self):
+        return f"{self.puzzle.name} requires [{self.requires_output.label}]"
+
+
+class OutputAcquired(models.Model):
+    session = models.ForeignKey(
+        GameSession, on_delete=models.CASCADE, related_name="acquired_outputs"
+    )
+    output = models.ForeignKey(PuzzleOutput, on_delete=models.CASCADE)
+    acquired_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("session", "output")
+
+    def __str__(self):
+        return f"{self.session} acquired {self.output.label}"

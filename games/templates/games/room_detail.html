@@ -49,18 +49,28 @@
   <ul class="list-group list-group-flush">
     {% for row in puzzle_rows %}
     {% with p=row.puzzle stat=row.stat %}
-    <li class="list-group-item d-flex justify-content-between align-items-start">
-      <div>
-        <strong>{{ p.name }}</strong>
-        <div class="small text-muted">Order {{ p.order }} · difficulty {{ p.difficulty }} · expected {{ p.expected_time }}s</div>
-      </div>
-      <div class="text-end small">
+    <li class="list-group-item">
+      <div class="row g-2 align-items-start">
+        <div class="col-md-4">
+          <strong>{{ p.name }}</strong>
+          <div class="small text-muted">Order {{ p.order }} · difficulty {{ p.difficulty }} · expected {{ p.expected_time }}s</div>
+        </div>
+        <div class="col-md-3 small">
+          <span class="text-muted">Requires</span>
+          <div>{% if row.requires %}{{ row.requires|join:", " }}{% else %}—{% endif %}</div>
+        </div>
+        <div class="col-md-3 small">
+          <span class="text-muted">Produces</span>
+          <div>{% if row.produces %}{{ row.produces|join:", " }}{% else %}—{% endif %}</div>
+        </div>
+        <div class="col-md-2 text-md-end small">
         {% if stat %}
-        <div><span class="badge text-bg-secondary">{{ stat.avg_vs_expected_ratio }}×</span> vs expected</div>
-        <div class="text-muted">avg hints {{ stat.avg_hints }}</div>
+          <div><span class="badge text-bg-secondary">{{ stat.avg_vs_expected_ratio }}×</span> vs expected</div>
+          <div class="text-muted">avg hints {{ stat.avg_hints }}</div>
         {% else %}
-        <span class="text-muted">No stats yet</span>
+          <span class="text-muted">No stats yet</span>
         {% endif %}
+        </div>
       </div>
     </li>
     {% endwith %}

@@ -4,11 +4,24 @@ from .models import (
     EscapeRoom,
     GameSession,
     HintEvent,
+    OutputAcquired,
     Player,
+    PuzzleDependency,
+    PuzzleOutput,
     Puzzle,
     PuzzleAttempt,
     Team,
 )
+
+class PuzzleOutputInline(admin.TabularInline):
+    model = PuzzleOutput
+    extra = 1
+
+
+class PuzzleDependencyInline(admin.TabularInline):
+    model = PuzzleDependency
+    extra = 1
+    fk_name = "puzzle"
 
 
 @admin.register(Player)
@@ -38,6 +51,7 @@ class PuzzleAdmin(admin.ModelAdmin):
     list_filter = ("room",)
     search_fields = ("name",)
     ordering = ("room", "order")
+    inlines = [PuzzleOutputInline, PuzzleDependencyInline]
 
 
 @admin.register(GameSession)
@@ -60,3 +74,19 @@ class HintEventAdmin(admin.ModelAdmin):
     list_display = ("id", "session", "puzzle", "timestamp", "auto_suggested", "accepted")
     list_filter = ("auto_suggested", "accepted")
     raw_id_fields = ("session", "puzzle")
+
+
+@admin.register(PuzzleOutput)
+class PuzzleOutputAdmin(admin.ModelAdmin):
+    list_display = ("id", "puzzle", "output_type", "output_value", "label")
+    list_filter = ("output_type", "puzzle__room")
+
+
+@admin.register(PuzzleDependency)
+class PuzzleDependencyAdmin(admin.ModelAdmin):
+    list_display = ("id", "puzzle", "requires_output", "all_required")
+
+
+@admin.register(OutputAcquired)
+class OutputAcquiredAdmin(admin.ModelAdmin):
+    list_display = ("id", "session", "output", "acquired_at")
