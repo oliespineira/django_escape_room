@@ -7,13 +7,21 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import views as auth_views
+
 from .intelligence import FairnessEngine, HintRecommender, QueueManager, SimulationMode
 from .models import EscapeRoom, GameSession, HintEvent, Puzzle, PuzzleAttempt, Team
 from .serializers import GameSessionSerializer, PuzzleSerializer, TeamSerializer
 from .services.analytics import AnalyticsEngine
 
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+
 # Create your views here.
 class GameSessionViewSet(viewsets.ModelViewSet):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAuthenticated]
     queryset = GameSession.objects.all()
     serializer_class = GameSessionSerializer
 
@@ -61,13 +69,20 @@ class GameSessionViewSet(viewsets.ModelViewSet):
         return Response({'status': 'session ended'})
 
 class PuzzleViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
     queryset = Puzzle.objects.all()
     serializer_class = PuzzleSerializer
 
 class TeamViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
     queryset = Team.objects.all()
     serializer_class = TeamSerializer
-    
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])    
 def queue_view(request):
     sessions = GameSession.objects.filter(active=True).select_related(
         'team', 'room', 'current_puzzle'
@@ -120,12 +135,12 @@ def _dashboard_queue_context():
         'fairness_outliers': fairness.detect_outliers(),
     }
 
-
+@login_required
 def dashboard_view(request):
     ctx = _dashboard_queue_context()
     return render(request, 'games/dashboard.html', ctx)
 
-
+@login_required
 def analytics_view(request):
     engine = AnalyticsEngine()
     puzzle_report = engine.puzzle_difficulty_report()[:14]
@@ -166,7 +181,7 @@ def analytics_view(request):
         'team_values_json': json.dumps(team_values),
     })
 
-
+@login_required
 def session_detail_view(request, pk):
     session = get_object_or_404(
         GameSession.objects.select_related('team', 'room'),
@@ -182,7 +197,7 @@ def session_detail_view(request, pk):
         'room_avg': room_avg,
     })
 
-
+@login_required
 def room_list_view(request):
     engine = AnalyticsEngine()
     rooms = EscapeRoom.objects.all().order_by('name')
@@ -191,7 +206,7 @@ def room_list_view(request):
         'rooms_with_scores': list(zip(rooms, scores)),
     })
 
-
+@login_required
 def room_detail_view(request, pk):
     room = get_object_or_404(EscapeRoom, pk=pk)
     engine = AnalyticsEngine()
@@ -206,7 +221,7 @@ def room_detail_view(request, pk):
         'balance': engine.game_balance_score(room),
     })
 
-
+@login_required
 def simulation_view(request):
     rooms = EscapeRoom.objects.all().order_by('name')
     teams = Team.objects.all().order_by('name')

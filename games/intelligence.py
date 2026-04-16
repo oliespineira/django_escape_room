@@ -16,6 +16,7 @@ class QueueManager:
             'preference':0.1,
         }
 
+    #sorts from highest to lowest priority.
     def rank_sessions(self, sessions):
         scores=[]
         for session in sessions:

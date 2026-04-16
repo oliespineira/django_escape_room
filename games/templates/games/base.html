@@ -25,6 +25,26 @@
           <li class="nav-item"><a class="nav-link" href="{% url 'simulation' %}">Simulation</a></li>
           <li class="nav-item"><a class="nav-link" href="/admin/" target="_blank" rel="noopener">Admin</a></li>
         </ul>
+
+        <!-- Paso 5: identidad del GM + logout en el navbar -->
+        {% if user.is_authenticated %}
+        <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-center">
+          <li class="nav-item">
+            <span class="navbar-text text-secondary me-3">
+              👤 {{ user.username }}
+            </span>
+          </li>
+          <li class="nav-item">
+            <form method="post" action="{% url 'logout' %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                Logout
+              </button>
+            </form>
+          </li>
+        </ul>
+        {% endif %}
+
       </div>
     </div>
   </nav>

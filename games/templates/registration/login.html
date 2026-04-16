@@ -1,0 +1,63 @@
+{% extends 'games/base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="row justify-content-center">
+    <div class="col-md-4">
+
+      <div class="card bg-dark border-secondary shadow">
+        <div class="card-body p-4">
+          <h3 class="card-title text-center text-light mb-4">
+            🔐 ERIS — GM Login
+          </h3>
+
+          {% if form.errors %}
+          <div class="alert alert-danger">
+            Usuario o contraseña incorrectos.
+          </div>
+          {% endif %}
+
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+
+            <div class="mb-3">
+              <label for="id_username" class="form-label text-light">Usuario</label>
+              <input
+                type="text"
+                name="username"
+                id="id_username"
+                class="form-control bg-dark text-light border-secondary"
+                autofocus
+                required
+              >
+            </div>
+
+            <div class="mb-3">
+              <label for="id_password" class="form-label text-light">Contraseña</label>
+              <input
+                type="password"
+                name="password"
+                id="id_password"
+                class="form-control bg-dark text-light border-secondary"
+                required
+              >
+            </div>
+
+            <div class="d-grid mt-4">
+              <button type="submit" class="btn btn-primary">
+                Entrar al Dashboard
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <p class="text-center text-muted mt-3 small">
+        Crea un GM con: <code>python manage.py createsuperuser</code>
+      </p>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
