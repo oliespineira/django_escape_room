@@ -132,29 +132,25 @@ class SimulationModeTests(TestCase):
 
 class APITests(TestCase):
     def setUp(self):
+        from django.contrib.auth.models import User
         self.client = APIClient()
+        # Create a GM user and authenticate the test client
+        self.user = User.objects.create_user(username="gm", password="testpass123")
+        self.client.force_authenticate(user=self.user)
         self.room = EscapeRoom.objects.create(
-            name="R1",
-            description="d",
-            difficulty="medium",
-            max_time=60,
-            theme="t",
+            name="R1", description="d", difficulty="medium", max_time=60, theme="t"
         )
         self.puzzle = Puzzle.objects.create(
-            room=self.room,
-            name="P1",
-            description="pd",
-            difficulty=5,
-            expected_time=600,
-            order=1,
+            room=self.room, name="P1", description="pd",
+            difficulty=5, expected_time=600, order=1
         )
         self.team = Team.objects.create(name="Team")
         self.session = GameSession.objects.create(
-            team=self.team,
-            room=self.room,
-            current_puzzle=self.puzzle,
-            active=True,
+            team=self.team, room=self.room,
+            current_puzzle=self.puzzle, active=True
         )
+
+
 
     def test_hint_endpoint(self):
         url = f"/api/sessions/{self.session.id}/hint/"
@@ -182,3 +178,147 @@ class APITests(TestCase):
         r = self.client.get("/api/queue/")
         self.assertEqual(r.status_code, status.HTTP_200_OK)
         self.assertIn("fairness", r.json())
+class QueueManagerEdgeCaseTests(TestCase):
+    """Tests for edge cases in the priority queue algorithm."""
+
+    def setUp(self):
+        self.room = EscapeRoom.objects.create(
+            name="R1", description="d", difficulty="medium", max_time=60, theme="t"
+        )
+        self.puzzle = Puzzle.objects.create(
+            room=self.room, name="P1", description="d",
+            difficulty=5, expected_time=600, order=1
+        )
+        self.team = Team.objects.create(name="Team")
+
+    def test_stuck_score_never_negative(self):
+        """Teams ahead of schedule should not receive a negative stuck score."""
+        session = GameSession.objects.create(
+            team=self.team, room=self.room,
+            current_puzzle=self.puzzle, active=True
+        )
+        attempt = PuzzleAttempt.objects.create(
+            session=session, puzzle=self.puzzle, completed=False
+        )
+        # Only 60s elapsed on a 600s expected puzzle — well ahead of schedule
+        attempt.start_time = timezone.now() - timedelta(seconds=60)
+        attempt.save(update_fields=["start_time"])
+
+        score = QueueManager()._stuck_score(session)
+        self.assertGreaterEqual(score, 0, "StuckScore must never be negative")
+
+    def test_priority_score_clamped_between_0_and_1(self):
+        """Final priority score must always be between 0 and 1."""
+        session = GameSession.objects.create(
+            team=self.team, room=self.room,
+            current_puzzle=self.puzzle, active=True
+        )
+        score = QueueManager().compute_priority(session)
+        self.assertGreaterEqual(score, 0)
+        self.assertLessEqual(score, 1)
+
+    def test_queue_sorted_descending(self):
+        """Queue must be sorted from highest to lowest priority."""
+        team2 = Team.objects.create(name="Team2")
+        s1 = GameSession.objects.create(
+            team=self.team, room=self.room, current_puzzle=self.puzzle, active=True
+        )
+        s2 = GameSession.objects.create(
+            team=team2, room=self.room, current_puzzle=self.puzzle, active=True
+        )
+        ranked = QueueManager().rank_sessions([s1, s2])
+        scores = [score for _, score in ranked]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+    def test_fairness_deficit_zero_with_single_session(self):
+        """With only one active session there can be no fairness deficit."""
+        GameSession.objects.filter(active=True).update(active=False)
+        session = GameSession.objects.create(
+            team=self.team, room=self.room, active=True
+        )
+        deficit = QueueManager()._fairness_deficit(session)
+        self.assertEqual(deficit, 0)
+
+    def test_time_urgency_increases_over_time(self):
+        """Urgency must be higher for an older session."""
+        s_new = GameSession.objects.create(
+            team=self.team, room=self.room, active=True
+        )
+        team2 = Team.objects.create(name="Team2")
+        s_old = GameSession.objects.create(
+            team=team2, room=self.room, active=True
+        )
+        s_old.start_time = timezone.now() - timedelta(minutes=50)
+        s_old.save(update_fields=["start_time"])
+
+        manager = QueueManager()
+        urgency_new = manager._time_urgency(s_new)
+        urgency_old = manager._time_urgency(s_old)
+        self.assertGreater(urgency_old, urgency_new)
+
+    def test_no_current_puzzle_returns_zero_stuck_score(self):
+        """Without an active puzzle the stuck score must be 0."""
+        session = GameSession.objects.create(
+            team=self.team, room=self.room,
+            current_puzzle=None, active=True
+        )
+        score = QueueManager()._stuck_score(session)
+        self.assertEqual(score, 0)
+
+
+class ModelValidationTests(TestCase):
+    """Tests for data model integrity."""
+
+    def setUp(self):
+        self.room = EscapeRoom.objects.create(
+            name="R1", description="d", difficulty="medium", max_time=60, theme="t"
+        )
+        self.team = Team.objects.create(name="Team")
+
+    def test_session_defaults(self):
+        """A new session must be active with zero hints and no end time."""
+        session = GameSession.objects.create(team=self.team, room=self.room)
+        self.assertTrue(session.active)
+        self.assertEqual(session.hints_given, 0)
+        self.assertIsNone(session.end_time)
+
+    def test_player_hint_preference_choices(self):
+        """hint_preference must accept all valid values defined in the spec."""
+        for pref in ["none", "low", "normal", "frequent"]:
+            p = Player.objects.create(
+                name=f"Player_{pref}",
+                experience_level="beginner",
+                hint_preference=pref
+            )
+            self.assertEqual(p.hint_preference, pref)
+
+    def test_puzzle_ordering(self):
+        """Puzzles must be returned ordered by their order field."""
+        p2 = Puzzle.objects.create(
+            room=self.room, name="P2", description="d",
+            difficulty=3, expected_time=300, order=2
+        )
+        p1 = Puzzle.objects.create(
+            room=self.room, name="P1", description="d",
+            difficulty=5, expected_time=600, order=1
+        )
+        puzzles = list(self.room.puzzle_set.all())
+        self.assertEqual(puzzles[0].id, p1.id)
+        self.assertEqual(puzzles[1].id, p2.id)
+
+
+class APIAuthTests(TestCase):
+    """Tests verifying that the API requires authentication."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_queue_requires_auth(self):
+        """/api/queue/ must reject unauthenticated requests."""
+        r = self.client.get("/api/queue/")
+        self.assertIn(r.status_code, [401, 403])
+
+    def test_sessions_requires_auth(self):
+        """/api/sessions/ must reject unauthenticated requests."""
+        r = self.client.get("/api/sessions/")
+        self.assertIn(r.status_code, [401, 403])

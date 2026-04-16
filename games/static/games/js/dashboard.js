@@ -133,9 +133,15 @@
   function refresh() {
     fetch("/api/queue/")
       .then(function (r) {
+        // Si la sesión expiró, redirige al login
+        if (r.status === 403 || r.status === 401) {
+          window.location.href = "/accounts/login/?next=/dashboard/";
+          return;
+        }
         return r.json();
       })
       .then(function (data) {
+        if (!data) return;
         const tbody = document.querySelector("#dashboard-queue-body");
         if (!tbody) return;
         const items = data.queue || [];

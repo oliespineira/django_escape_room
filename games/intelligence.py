@@ -38,18 +38,20 @@ class QueueManager:
         )
         return max(0, min(1, priority))
     def _stuck_score(self, session):
-        if not session.current_puzzle:
+        if session.current_puzzle is None:
             return 0
-        attempt= PuzzleAttempt.objects.filter(
-            session=session, puzzle=session.current_puzzle, completed=False
+        attempt = PuzzleAttempt.objects.filter(
+            session=session,
+            puzzle=session.current_puzzle,
+            completed=False
         ).first()
         if not attempt:
             return 0
-        elapsed= (timezone.now()- attempt.start_time).total_seconds()
+        elapsed = (timezone.now() - attempt.start_time).total_seconds()
         expected = session.current_puzzle.expected_time
-        if expected ==0:
+        if expected == 0:
             return 0
-        return (elapsed-expected)/expected
+        return max(0.0, (elapsed - expected) / expected)  # ← clamp: never negative
     def _fairness_deficit(self, session):
         avg = GameSession.objects.filter(active=True).aggregate(
             Avg('hints_given')
