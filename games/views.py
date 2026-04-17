@@ -140,7 +140,7 @@ class GameSessionViewSet(viewsets.ModelViewSet):
             {'detail': 'Session is already active or ended.'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], url_path='complete-puzzle')
     def complete_puzzle(self, request, pk=None):
         """Mark current puzzle as completed and advance to the next one."""
         session = self.get_object()
