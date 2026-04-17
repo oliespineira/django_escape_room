@@ -199,23 +199,62 @@ class Command(BaseCommand):
 
         base_expected_min = {"easy": 5, "medium": 7, "hard": 9}.get(room.difficulty, 7)
 
+        # Which puzzle categories are realistic for each difficulty tier
+        categories_by_difficulty = {
+            "easy":   ["search", "logical"],
+            "medium": ["logical", "code", "search"],
+            "hard":   ["code", "physical", "logical"],
+        }
+
+        # Possible subtypes for each category
+        subtypes = {
+            "logical":  ["pattern", "deduction", "sequence"],
+            "physical": ["assembly", "maze", "dexterity"],
+            "code":     ["cipher", "combination", "symbol_match"],
+            "search":   ["hidden_object", "secret_compartment"],
+        }
+
+        # Base difficulty score per room tier, used as the starting point before random noise
+        base_difficulty = {"easy": 3, "medium": 5, "hard": 7}.get(room.difficulty, 5)
+
         puzzles = []
         for order in range(1, count + 1):
-            # expected time increases slightly by order and difficulty
+            # Expected time grows slightly with puzzle order to reflect increasing complexity
             expected_minutes = base_expected_min + int(order * 0.8) + random.randint(-1, 2)
             expected_seconds = max(60, expected_minutes * 60)
+
+            category = random.choice(categories_by_difficulty.get(room.difficulty, ["logical"]))
+            subtype  = random.choice(subtypes[category])
+
+            # Parallel puzzles can be attempted at any time regardless of dependencies.
+            # Hard rooms have fewer parallel puzzles to keep the flow more gated.
+            parallel_chance = {"easy": 0.4, "medium": 0.3, "hard": 0.15}.get(room.difficulty, 0.25)
+            is_parallel = random.random() < parallel_chance
+
             puzzles.append(
                 Puzzle(
                     room=room,
                     name=f"Puzzle {order}",
                     description=f"Challenge {order} in {room.name}.",
-                    difficulty=min(10, max(1, (3 if room.difficulty == 'easy' else 5 if room.difficulty == 'medium' else 7) + random.randint(-1, 2))),
+                    category=category,
+                    subtype=subtype,
+                    difficulty=min(10, max(1, base_difficulty + random.randint(-1, 2))),
                     expected_time=expected_seconds,
                     order=order,
+                    is_parallel=is_parallel,
                 )
             )
+
         Puzzle.objects.bulk_create(puzzles)
         return list(Puzzle.objects.filter(room=room).order_by("order"))
+
+
+
+
+
+
+
+
 
     def _team_profile(self, team):
         exp_weights = {"beginner": 0.0, "intermediate": 0.5, "expert": 1.0}

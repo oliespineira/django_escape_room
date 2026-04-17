@@ -107,6 +107,8 @@ class QueueManager:
         return max(0, deficit)
 
     def _time_urgency(self, session):
+        if not session.start_time:
+            return 0.0
         elapsed = (timezone.now() - session.start_time).total_seconds()
         total = session.room.max_time * 60
         remaining = total - elapsed

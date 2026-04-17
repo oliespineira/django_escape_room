@@ -49,12 +49,22 @@ class EscapeRoom(models.Model):
         return self.name
     
 class Puzzle(models.Model):
+    CATEGORY_CHOICES = [
+        ('logical',  'Logical'),
+        ('physical', 'Physical'),
+        ('code',     'Code-breaking'),
+        ('search',   'Search & discovery'),
+    ]
+
     room = models.ForeignKey(EscapeRoom, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     description = models.TextField()
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='logical')
+    subtype = models.CharField(max_length=50, blank=True, default='')
     difficulty = models.IntegerField(default=5)
-    expected_time = models.IntegerField()  #in seconds
+    expected_time = models.IntegerField()
     order = models.IntegerField()
+    is_parallel = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['order']

@@ -265,6 +265,14 @@ class QueueManagerEdgeCaseTests(TestCase):
         score = QueueManager()._stuck_score(session)
         self.assertEqual(score, 0)
 
+    def test_time_urgency_zero_when_session_not_started(self):
+        """Pending sessions (no start_time) must have zero urgency."""
+        session = GameSession.objects.create(
+            team=self.team, room=self.room, active=False
+        )
+        urgency = QueueManager()._time_urgency(session)
+        self.assertEqual(urgency, 0.0)
+
 
 class ModelValidationTests(TestCase):
     """Tests for data model integrity."""
@@ -276,9 +284,9 @@ class ModelValidationTests(TestCase):
         self.team = Team.objects.create(name="Team")
 
     def test_session_defaults(self):
-        """A new session must be active with zero hints and no end time."""
+        """A new session starts pending with zero hints and no end time."""
         session = GameSession.objects.create(team=self.team, room=self.room)
-        self.assertTrue(session.active)
+        self.assertFalse(session.active)
         self.assertEqual(session.hints_given, 0)
         self.assertIsNone(session.end_time)
 

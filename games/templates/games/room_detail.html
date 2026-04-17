@@ -53,7 +53,13 @@
       <div class="row g-2 align-items-start">
         <div class="col-md-4">
           <strong>{{ p.name }}</strong>
-          <div class="small text-muted">Order {{ p.order }} · difficulty {{ p.difficulty }} · expected {{ p.expected_time }}s</div>
+          <div class="small text-muted">
+            Order {{ p.order }} ·
+            <span class="badge bg-light text-dark border">{{ p.category }}</span>
+            {% if p.subtype %}<span class="text-muted">{{ p.subtype }}</span>{% endif %} ·
+            difficulty {{ p.difficulty }} · expected {{ p.expected_time }}s
+            {% if p.is_parallel %}<span class="badge bg-info text-dark ms-1">parallel</span>{% endif %}
+          </div>
         </div>
         <div class="col-md-3 small">
           <span class="text-muted">Requires</span>

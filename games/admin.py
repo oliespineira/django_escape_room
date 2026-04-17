@@ -47,8 +47,8 @@ class EscapeRoomAdmin(admin.ModelAdmin):
 
 @admin.register(Puzzle)
 class PuzzleAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "room", "order", "difficulty", "expected_time")
-    list_filter = ("room",)
+    list_display = ("id", "name", "room", "category", "subtype", "order", "difficulty", "expected_time", "is_parallel")
+    list_filter  = ("room", "category", "is_parallel")
     search_fields = ("name",)
     ordering = ("room", "order")
     inlines = [PuzzleOutputInline, PuzzleDependencyInline]
