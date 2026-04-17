@@ -10,8 +10,8 @@
   <link rel="stylesheet" href="{% static 'games/css/style.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-body-tertiary">
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary">
+<body class="eris-app {% block body_class %}{% endblock %}">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary eris-topnav">
     <div class="container-fluid">
       <a class="navbar-brand fw-semibold" href="{% url 'dashboard' %}">ERIS</a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
@@ -67,9 +67,39 @@
     </div>
   </nav>
 
-  <main class="container py-4">
-    {% block content %}{% endblock %}
-  </main>
+  <div class="eris-global-shell">
+    <aside class="eris-global-sidebar card">
+      <div class="eris-cp-brand">
+        <div class="eris-cp-kicker">Command</div>
+        <h2>ERIS</h2>
+        <p>SECTOR_07</p>
+      </div>
+      <ul class="eris-cp-menu">
+        <li class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+          <a href="{% url 'dashboard' %}">Dashboard</a>
+        </li>
+        <li class="{% if request.resolver_match.url_name == 'room_list' or request.resolver_match.url_name == 'room_detail' %}active{% endif %}">
+          <a href="{% url 'room_list' %}">Room management</a>
+        </li>
+        <li class="{% if request.resolver_match.url_name == 'setup' %}active{% endif %}">
+          <a href="{% url 'setup' %}">Session setup</a>
+        </li>
+        <li class="{% if request.resolver_match.url_name == 'analytics' %}active{% endif %}">
+          <a href="{% url 'analytics' %}">Tactical analytics</a>
+        </li>
+        <li class="{% if request.resolver_match.url_name == 'simulation' %}active{% endif %}">
+          <a href="{% url 'simulation' %}">Simulation</a>
+        </li>
+        <li>
+          <a href="/admin/" target="_blank" rel="noopener">Admin</a>
+        </li>
+      </ul>
+    </aside>
+
+    <main class="container py-4 eris-main">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
           integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"

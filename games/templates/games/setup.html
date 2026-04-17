@@ -1,6 +1,7 @@
 {% extends "games/base.html" %}
 
 {% block title %}Session Setup{% endblock %}
+{% block body_class %}eris-setup{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4">
@@ -70,7 +71,7 @@
             <input
               type="text"
               name="team_name_{{ room.id }}"
-              class="form-control"
+              class="form-control text-white"
               placeholder="e.g. The Detectives"
             >
           </div>
@@ -78,7 +79,7 @@
             <label class="form-label fw-semibold">Player names <span class="text-muted fw-normal">(one per line, optional)</span></label>
             <textarea
               name="players_{{ room.id }}"
-              class="form-control"
+              class="form-control text-white"
               rows="3"
               placeholder="Alice&#10;Bob&#10;Carol"
             ></textarea>
@@ -93,7 +94,7 @@
   <div class="card" id="submit-card" style="display:none!important">
     <div class="card-body d-flex align-items-center justify-content-between">
       <div>
-        <strong>Ready?</strong>
+        <strong class="text-white">Ready?</strong>
         <span class="text-muted small ms-2">Sessions will be created but <em>not started</em> — start each one individually from the dashboard.</span>
       </div>
       <button type="submit" class="btn btn-primary btn-lg">

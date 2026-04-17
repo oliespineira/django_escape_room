@@ -1,4 +1,15 @@
 (function () {
+  const axisColor = "rgba(212, 236, 255, 0.92)";
+  const gridColor = "rgba(82, 228, 255, 0.14)";
+  const legend = {
+    labels: {
+      color: axisColor,
+      boxWidth: 12,
+      boxHeight: 12,
+      usePointStyle: false,
+    },
+  };
+
   const el = document.getElementById("chart-puzzle-difficulty");
   if (!el || typeof Chart === "undefined") return;
 
@@ -14,24 +25,32 @@
         {
           label: "Expected (min)",
           data: expected,
-          backgroundColor: "rgba(13, 110, 253, 0.35)",
-          borderColor: "rgba(13, 110, 253, 1)",
+          backgroundColor: "rgba(69, 135, 255, 0.45)",
+          borderColor: "rgba(69, 135, 255, 1)",
           borderWidth: 1,
         },
         {
           label: "Avg solve (min)",
           data: actual,
-          backgroundColor: "rgba(111, 66, 193, 0.35)",
-          borderColor: "rgba(111, 66, 193, 1)",
+          backgroundColor: "rgba(127, 96, 255, 0.48)",
+          borderColor: "rgba(127, 96, 255, 1)",
           borderWidth: 1,
         },
       ],
     },
     options: {
       responsive: true,
+      plugins: { legend: legend },
       scales: {
-        x: { ticks: { maxRotation: 45, minRotation: 45 } },
-        y: { beginAtZero: true },
+        x: {
+          ticks: { color: axisColor, maxRotation: 45, minRotation: 45 },
+          grid: { color: gridColor },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: axisColor },
+          grid: { color: gridColor },
+        },
       },
     },
   });
@@ -45,11 +64,16 @@
         datasets: [
           {
             data: JSON.parse(doughnutEl.dataset.values || "[]"),
-            backgroundColor: ["#0d6efd", "#6610f2", "#6f42c1", "#d63384", "#fd7e14"],
+            backgroundColor: ["#2e85ff", "#46ecff", "#7f60ff", "#2df194", "#ffc55a"],
+            borderColor: "rgba(8, 17, 30, 0.92)",
+            borderWidth: 2,
           },
         ],
       },
-      options: { responsive: true, plugins: { legend: { position: "bottom" } } },
+      options: {
+        responsive: true,
+        plugins: { legend: { ...legend, position: "bottom" } },
+      },
     });
   }
 
@@ -65,14 +89,27 @@
             data: JSON.parse(lineEl.dataset.values || "[]"),
             fill: true,
             tension: 0.25,
-            borderColor: "rgba(25, 135, 84, 1)",
-            backgroundColor: "rgba(25, 135, 84, 0.15)",
+            borderColor: "rgba(45, 241, 148, 1)",
+            backgroundColor: "rgba(45, 241, 148, 0.18)",
+            pointBackgroundColor: "rgba(45, 241, 148, 1)",
+            pointBorderColor: "rgba(8, 17, 30, 0.95)",
           },
         ],
       },
       options: {
         responsive: true,
-        scales: { y: { beginAtZero: true } },
+        plugins: { legend: legend },
+        scales: {
+          x: {
+            ticks: { color: axisColor, maxRotation: 0, minRotation: 0 },
+            grid: { color: gridColor },
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: axisColor },
+            grid: { color: gridColor },
+          },
+        },
       },
     });
   }
@@ -87,15 +124,27 @@
           {
             label: "Success rate",
             data: JSON.parse(teamEl.dataset.values || "[]"),
-            backgroundColor: "rgba(253, 126, 20, 0.5)",
-            borderColor: "rgba(253, 126, 20, 1)",
+            backgroundColor: "rgba(255, 197, 90, 0.4)",
+            borderColor: "rgba(255, 197, 90, 1)",
             borderWidth: 1,
           },
         ],
       },
       options: {
         responsive: true,
-        scales: { y: { beginAtZero: true, max: 1 } },
+        plugins: { legend: legend },
+        scales: {
+          x: {
+            ticks: { color: axisColor },
+            grid: { color: gridColor },
+          },
+          y: {
+            beginAtZero: true,
+            max: 1,
+            ticks: { color: axisColor },
+            grid: { color: gridColor },
+          },
+        },
       },
     });
   }

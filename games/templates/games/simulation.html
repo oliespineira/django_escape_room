@@ -1,6 +1,7 @@
 {% extends "games/base.html" %}
 
 {% block title %}Simulation{% endblock %}
+{% block body_class %}eris-simulation{% endblock %}
 
 {% block content %}
 <h1 class="h3 mb-1">Simulation mode</h1>
@@ -92,7 +93,7 @@
         <span class="badge bg-success">High success ({{ c.success_rate }})</span>
         — Teams are likely to escape. Fewer hints needed.
       {% elif c.success_rate >= 0.5 %}
-        <span class="badge bg-warning text-dark">Moderate ({{ c.success_rate }})</span>
+        <span class="badge bg-warning">Moderate ({{ c.success_rate }})</span>
         — About half of teams escape. Balanced intervention.
       {% else %}
         <span class="badge bg-danger">Low success ({{ c.success_rate }})</span>

@@ -1,34 +1,598 @@
 :root {
-  --eris-accent: #6f42c1;
+  --eris-bg: #050910;
+  --eris-bg-2: #0a1320;
+  --eris-panel: #0d1828;
+  --eris-panel-2: #111f33;
+  --eris-border: rgba(82, 228, 255, 0.24);
+  --eris-text: #e9f8ff;
+  --eris-muted: #b7cee3;
+  --eris-accent: #46ecff;
+  --eris-accent-2: #5792ff;
+  --eris-good: #2df194;
+  --eris-warn: #ffc55a;
+  --eris-danger: #ff6a86;
 }
 
-.navbar-brand {
+body.eris-app {
+  color: var(--eris-text) !important;
+  background:
+    radial-gradient(circle at 6% 14%, rgba(70, 236, 255, 0.18), transparent 22%),
+    radial-gradient(circle at 90% 0%, rgba(87, 146, 255, 0.2), transparent 26%),
+    linear-gradient(140deg, var(--eris-bg), var(--eris-bg-2)) !important;
+  min-height: 100vh;
+}
+
+.eris-app .eris-topnav.navbar {
+  background: rgba(6, 11, 22, 0.86) !important;
+  border-bottom: 1px solid var(--eris-border) !important;
+  backdrop-filter: blur(8px);
+}
+
+.eris-app .navbar-brand {
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--eris-accent) !important;
+}
+
+.eris-app .nav-link {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.75rem;
+  color: rgba(233, 248, 255, 0.76) !important;
+}
+
+.eris-app .nav-link:hover,
+.eris-app .nav-link.active {
+  color: var(--eris-accent) !important;
+}
+
+.eris-app .navbar-text,
+.eris-app .text-muted {
+  color: var(--eris-muted) !important;
+}
+
+.eris-app .small {
+  color: #cfe1f2;
+}
+
+.eris-app .form-label {
+  color: #d9ecfb;
+  letter-spacing: 0.03em;
+}
+
+.eris-app .form-check-label,
+.eris-app .form-check-label .small {
+  color: #d8ecfb !important;
+}
+
+.eris-app .form-check-input {
+  background-color: rgba(8, 16, 28, 0.9);
+  border-color: rgba(82, 228, 255, 0.45);
+}
+
+.eris-app .form-check-input:checked {
+  background-color: #46ecff;
+  border-color: #46ecff;
+}
+
+.eris-app .form-select,
+.eris-app .form-control {
+  background: rgba(8, 16, 28, 0.88);
+  border-color: rgba(82, 228, 255, 0.28);
+  color: #e9f8ff;
+}
+
+.eris-app .form-select:focus,
+.eris-app .form-control:focus {
+  border-color: rgba(70, 236, 255, 0.62);
+  box-shadow: 0 0 0 0.2rem rgba(70, 236, 255, 0.16);
+}
+
+.eris-app code {
+  color: #9dd7ff;
+}
+
+.eris-app .eris-main {
+  max-width: 100% !important;
+}
+
+.eris-global-shell {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1rem 1rem 1.25rem;
+}
+
+.eris-global-sidebar {
+  padding: 1rem;
+  height: fit-content;
+  position: sticky;
+  top: 84px;
+}
+
+.eris-app h1,
+.eris-app h2,
+.eris-app h3,
+.eris-app .h3 {
+  color: #f4fcff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.eris-app .card {
+  background: linear-gradient(160deg, rgba(17, 31, 51, 0.95), rgba(10, 20, 35, 0.95)) !important;
+  border: 1px solid var(--eris-border) !important;
+  border-radius: 0.95rem !important;
+  box-shadow: inset 0 1px 0 rgba(140, 240, 255, 0.06), 0 10px 28px rgba(0, 0, 0, 0.4) !important;
+  color: #dcebfa !important;
+}
+
+.eris-app .card-header {
+  background: rgba(6, 14, 24, 0.72) !important;
+  border-bottom: 1px solid rgba(82, 228, 255, 0.18) !important;
+  color: #bce9ff !important;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 0.74rem;
+}
+
+.eris-app .list-group-item {
+  background: transparent !important;
+  color: var(--eris-text) !important;
+  border-color: rgba(82, 228, 255, 0.12) !important;
+}
+
+.eris-dashboard .eris-main {
+  padding: 0 !important;
+}
+
+.eris-cp-shell {
+  display: grid;
+  grid-template-columns: minmax(620px, 1fr) 300px;
+  gap: 1rem;
+  min-height: calc(100vh - 130px);
+}
+
+.eris-cp-brand {
+  margin-bottom: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid rgba(82, 228, 255, 0.18);
+}
+
+.eris-cp-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.68rem;
+  color: var(--eris-accent);
+}
+
+.eris-cp-brand h2 {
+  margin: 0.2rem 0 0;
+}
+
+.eris-cp-brand p {
+  margin: 0.15rem 0 0;
+  font-size: 0.74rem;
+  color: var(--eris-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.eris-cp-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.eris-cp-menu li {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  border-radius: 0.68rem;
+  border: 1px solid transparent;
+  color: #a6c7de;
+  padding: 0.55rem 0.7rem;
+}
+
+.eris-cp-menu li.active {
+  border-color: rgba(70, 236, 255, 0.58);
+  background: rgba(70, 236, 255, 0.09);
+  color: #e2fbff;
+}
+
+.eris-cp-menu li a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.eris-cp-main,
+.eris-cp-side {
+  min-width: 0;
+}
+
+.eris-cp-side .card-body,
+.eris-cp-side .list-unstyled,
+.eris-cp-side .small,
+.eris-cp-side li span {
+  color: #d6e9f8 !important;
+}
+
+.eris-cp-side #fairness-outliers p {
+  color: #cfe3f5 !important;
+}
+
+.eris-pill {
+  background: rgba(45, 241, 148, 0.14) !important;
+  color: #a8ffd3 !important;
+  border: 1px solid rgba(45, 241, 148, 0.5) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+}
+
+.eris-table-card .card-body {
+  max-height: 62vh;
+  overflow: auto;
+}
+
+.eris-session-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.eris-session-card {
+  background: linear-gradient(160deg, rgba(24, 32, 47, 0.96), rgba(12, 22, 36, 0.96));
+  border: 1px solid rgba(82, 228, 255, 0.24);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: inset 0 1px 0 rgba(120, 230, 255, 0.08), 0 10px 24px rgba(0, 0, 0, 0.34);
+}
+
+.eris-room-code {
+  color: #9cb3c8;
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.eris-room-name {
+  color: #eff8ff;
+  text-decoration: none;
+  font-size: 2rem;
+  line-height: 1;
+  font-weight: 700;
   letter-spacing: 0.02em;
 }
 
-.card {
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.04);
+.eris-room-name:hover {
+  color: #8eedff;
 }
 
-.badge-rec-hint {
-  background-color: #dc3545;
-}
-
-.badge-rec-monitor {
-  background-color: #ffc107;
-  color: #212529;
-}
-
-.badge-rec-wait {
-  background-color: #198754;
-}
-
-.table-eris th {
+.eris-status-chip {
+  border: 1px solid rgba(45, 241, 148, 0.62);
+  background: rgba(7, 22, 14, 0.95);
+  color: #63ffb0;
   font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.35rem 0.7rem;
+}
+
+.eris-session-panel {
+  background: rgba(6, 14, 24, 0.9);
+  border: 1px solid rgba(82, 228, 255, 0.12);
+  border-radius: 0.65rem;
+  padding: 0.75rem;
+}
+
+.eris-session-panel-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: #9fb7cb;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  margin-bottom: 0.35rem;
+}
+
+.eris-session-panel-values {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.eris-puzzle-name {
+  color: #7cefff;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.eris-puzzle-state {
+  color: #36ff86;
+  font-size: 1.05rem;
+  font-weight: 700;
   letter-spacing: 0.04em;
-  color: #6c757d;
+}
+
+.eris-session-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.eris-session-metrics > div {
+  background: rgba(6, 14, 24, 0.88);
+  border: 1px solid rgba(82, 228, 255, 0.1);
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.eris-session-metrics span {
+  display: block;
+  color: #9cb6cb;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.7rem;
+}
+
+.eris-session-metrics strong {
+  color: #ffd170;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.eris-rec-reason {
+  color: #d0e7f9 !important;
+}
+
+.eris-session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+}
+
+.eris-session-card.is-critical .eris-status-chip {
+  border-color: rgba(255, 106, 134, 0.65);
+  color: #ff9fb3;
+  background: rgba(39, 8, 18, 0.95);
+}
+
+.eris-session-card.is-watch .eris-status-chip {
+  border-color: rgba(255, 197, 90, 0.65);
+  color: #ffd889;
+  background: rgba(40, 25, 5, 0.95);
+}
+
+.eris-session-card.is-paused .eris-status-chip {
+  border-color: rgba(162, 181, 199, 0.55);
+  color: #d3dfea;
+  background: rgba(32, 39, 51, 0.95);
+}
+
+.table-eris {
+  color: #ddf3ff !important;
+}
+
+.eris-app .table:not(.table-eris) {
+  color: #d8ecfb;
+}
+
+.eris-app .table:not(.table-eris) th {
+  color: #d7ebfc;
+  background: rgba(10, 20, 35, 0.8);
+  border-color: rgba(82, 228, 255, 0.18);
+}
+
+.eris-app .table:not(.table-eris) td {
+  color: #d8ecfb;
+  border-color: rgba(82, 228, 255, 0.12);
+  background: rgba(8, 16, 28, 0.68);
+}
+
+.table-eris thead th {
+  background: #0d1727 !important;
+  color: #99bfd9 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  border-bottom: 1px solid rgba(82, 228, 255, 0.2);
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.table-eris tbody td {
+  background: rgba(9, 17, 30, 0.74) !important;
+  border-bottom: 1px solid rgba(82, 228, 255, 0.1);
+}
+
+.table-eris.table-hover > tbody > tr:hover > * {
+  background: rgba(70, 236, 255, 0.08) !important;
+}
+
+.table-eris .table-danger > * {
+  --bs-table-bg: rgba(77, 19, 37, 0.57);
+  --bs-table-color: #ffd7df;
+}
+
+.table-eris .table-warning > * {
+  --bs-table-bg: rgba(70, 54, 11, 0.56);
+  --bs-table-color: #ffe9ad;
+}
+
+.table-eris .table-success > * {
+  --bs-table-bg: rgba(10, 66, 44, 0.53);
+  --bs-table-color: #ceffe8;
+}
+
+.table-eris .table-secondary > * {
+  --bs-table-bg: rgba(29, 43, 65, 0.54);
+  --bs-table-color: #d0ddec;
+}
+
+.table-eris .table-light > * {
+  --bs-table-bg: rgba(19, 30, 48, 0.72);
+  --bs-table-color: #dfedf8;
+}
+
+.eris-app .badge-rec-hint,
+.eris-app .badge.bg-danger {
+  background: rgba(255, 106, 134, 0.22) !important;
+  color: #ffb4c3 !important;
+  border: 1px solid rgba(255, 106, 134, 0.55);
+}
+
+.eris-app .badge-rec-monitor,
+.eris-app .badge.bg-warning {
+  background: rgba(255, 197, 90, 0.2) !important;
+  color: #ffdc97 !important;
+  border: 1px solid rgba(255, 197, 90, 0.56);
+}
+
+.eris-app .badge-rec-wait,
+.eris-app .badge.bg-success {
+  background: rgba(45, 241, 148, 0.2) !important;
+  color: #b1ffda !important;
+  border: 1px solid rgba(45, 241, 148, 0.56);
+}
+
+.eris-app .badge.bg-secondary {
+  background: rgba(87, 146, 255, 0.2) !important;
+  color: #c6dbff !important;
+  border: 1px solid rgba(87, 146, 255, 0.5);
+}
+
+.eris-app .badge.bg-info {
+  background: rgba(70, 236, 255, 0.2) !important;
+  color: #bdf7ff !important;
+  border: 1px solid rgba(70, 236, 255, 0.56);
+}
+
+.eris-app .rooms-balance-label {
+  color: #d8ecfb !important;
+  letter-spacing: 0.03em;
+}
+
+.eris-setup .room-card {
+  background: linear-gradient(160deg, rgba(14, 27, 44, 0.92), rgba(10, 20, 35, 0.92));
+}
+
+.eris-setup .room-card.border-primary {
+  border-color: rgba(70, 236, 255, 0.7) !important;
+  box-shadow: 0 0 0 2px rgba(70, 236, 255, 0.16);
+}
+
+.eris-setup .text-danger {
+  color: #ff9db1 !important;
+}
+
+.eris-room-detail .breadcrumb-item a {
+  color: #a7eaff;
+}
+
+.eris-room-detail .breadcrumb-item.active {
+  color: #d8edf9;
+}
+
+.eris-room-detail .fs-5 {
+  color: #edf8ff;
+}
+
+.eris-room-detail .list-group-item strong {
+  color: #eaf7ff;
+}
+
+.eris-simulation .card-body,
+.eris-simulation .list-unstyled li,
+.eris-simulation .table,
+.eris-simulation .table td,
+.eris-simulation .table th {
+  color: #dcedfb !important;
+}
+
+.eris-simulation .card-body p,
+.eris-simulation .card-body li,
+.eris-simulation .card-body div,
+.eris-simulation .card-body span,
+.eris-simulation .card-body strong,
+.eris-simulation .card-body code {
+  color: #e5f3ff !important;
+}
+
+.eris-simulation .table thead th {
+  color: #e4f3ff !important;
+}
+
+.eris-simulation .badge.bg-warning {
+  color: #1a1303 !important;
+}
+
+.eris-session-detail .breadcrumb-item,
+.eris-session-detail .small,
+.eris-session-detail .text-muted {
+  color: #d3e8f8 !important;
+}
+
+.eris-session-detail .fs-5 {
+  color: #eef8ff;
+}
+
+.eris-room-detail .card-body,
+.eris-room-detail .card-body div,
+.eris-room-detail .card-body strong,
+.eris-room-detail .fs-5 {
+  color: #e6f3ff !important;
+}
+
+.eris-session-detail .font-monospace {
+  color: #ffe39b;
+}
+
+.eris-session-detail .list-group-item strong {
+  color: #edf8ff;
+}
+
+.eris-session-detail .list-group-item span {
+  color: inherit;
+}
+
+.eris-dashboard .btn {
+  border-radius: 0.55rem;
+  letter-spacing: 0.04em;
+}
+
+.eris-dashboard .btn-success {
+  background: linear-gradient(115deg, #22cc83, #2df194) !important;
+  border-color: #2df194 !important;
+  color: #051013 !important;
+}
+
+.eris-dashboard .btn-outline-primary {
+  border-color: rgba(70, 236, 255, 0.78) !important;
+  color: #9cf7ff !important;
+}
+
+.eris-dashboard .btn-outline-warning {
+  border-color: rgba(255, 197, 90, 0.78) !important;
+  color: #ffd996 !important;
+}
+
+.eris-dashboard .btn-outline-danger {
+  border-color: rgba(255, 106, 134, 0.72) !important;
+  color: #ff9fb3 !important;
+}
+
+.eris-cp-side .alert-warning {
+  background: rgba(255, 106, 134, 0.14) !important;
+  border: 1px solid rgba(255, 106, 134, 0.44) !important;
+  color: #ffd8e0 !important;
 }
 
 .timeline-dot {
@@ -37,4 +601,23 @@
   border-radius: 50%;
   display: inline-block;
   margin-right: 0.5rem;
+  box-shadow: 0 0 12px currentcolor;
+}
+
+@media (max-width: 1280px) {
+  .eris-global-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .eris-global-sidebar {
+    position: static;
+  }
+
+  .eris-cp-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .eris-table-card .card-body {
+    max-height: none;
+  }
 }

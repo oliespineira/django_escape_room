@@ -2,157 +2,160 @@
 {% load static %}
 
 {% block title %}GM Dashboard{% endblock %}
+{% block body_class %}eris-dashboard{% endblock %}
 
 {% block content %}
 {% csrf_token %}
 <div id="dashboard-root" data-refresh-ms="10000"></div>
 
-<div class="row g-4">
-  <div class="col-lg-8">
+<div class="eris-cp-shell eris-cp-shell-dashboard">
+  <section class="eris-cp-main">
     <div class="d-flex align-items-center justify-content-between mb-3">
       <div>
-        <h1 class="h3 mb-0">GM Dashboard</h1>
-        <p class="text-muted small mb-0">Live sessions, priority queue, hint recommendations</p>
+        <h1 class="h3 mb-1">System oversight</h1>
+        <p class="text-muted small mb-0">Real-time escape room orchestration and team monitoring</p>
       </div>
-      <span class="badge text-bg-secondary">Auto-refresh 10s</span>
+      <span class="badge eris-pill">Live feed established</span>
     </div>
 
-    <div class="card">
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover table-eris mb-0 align-middle">
-            <thead class="table-light">
-              <tr>
-                <th>Team</th>
-                <th>Room</th>
-                <th>Puzzle</th>
-                <th>Elapsed</th>
-                <th>Hints</th>
-                <th>Recommendation</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="dashboard-queue-body">
-              {% for row in queue_rows %}
-              {% with rec=row.recommendation %}
-              <tr data-session-id="{{ row.session.id }}"
-                  class="{% if row.session.status == 'active' %}{% if rec.action == 'hint' %}table-danger{% elif rec.action == 'monitor' %}table-warning{% else %}table-success{% endif %}{% elif row.session.status == 'paused' %}table-secondary{% else %}table-light{% endif %}">
-                <td>
-                  <a href="{% url 'session_detail' row.session.id %}" class="text-decoration-none fw-bold">
-                    {{ row.session.team.name }}
-                  </a>
-                  <div class="small text-muted">#{{ row.session.id }}</div>
-                </td>
-                <td>{{ row.session.room.name }}</td>
-                <td>
+    <div class="card eris-table-card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Live operations queue</span>
+        <span class="small text-muted">Auto-refresh 10s</span>
+      </div>
+      <div class="card-body">
+        <div id="dashboard-session-cards" class="eris-session-grid">
+          {% for row in queue_rows %}
+          {% with rec=row.recommendation %}
+          <article
+            class="eris-session-card {% if row.session.status == 'active' %}{% if rec.action == 'hint' %}is-critical{% elif rec.action == 'monitor' %}is-watch{% else %}is-stable{% endif %}{% elif row.session.status == 'paused' %}is-paused{% else %}is-pending{% endif %}"
+            data-session-id="{{ row.session.id }}"
+          >
+            <header class="d-flex justify-content-between align-items-start mb-3">
+              <div>
+                <div class="eris-room-code">ROOM_{{ row.session.id }}</div>
+                <a href="{% url 'session_detail' row.session.id %}" class="eris-room-name">
+                  {{ row.session.room.name|upper }}
+                </a>
+              </div>
+              <span class="eris-status-chip">
+                {% if row.session.status == "active" %}
+                  {% if rec.action == "hint" %}STUCK{% elif rec.action == "monitor" %}MONITOR{% else %}IN_PROGRESS{% endif %}
+                {% elif row.session.status == "paused" %}
+                  PAUSED
+                {% elif row.session.status == "pending" %}
+                  READY
+                {% else %}
+                  ENDED
+                {% endif %}
+              </span>
+            </header>
+
+            <section class="eris-session-panel mb-3">
+              <div class="eris-session-panel-row">
+                <span>CURRENT PUZZLE</span>
+                <span>STATUS</span>
+              </div>
+              <div class="eris-session-panel-values">
+                <div class="eris-puzzle-name">
                   {% if row.session.current_puzzle %}
-                    <div class="fw-semibold">#{{ row.session.current_puzzle.order }} - {{ row.session.current_puzzle.name }}</div>
+                    #{{ row.session.current_puzzle.order }} · {{ row.session.current_puzzle.name|upper }}
                   {% else %}
-                    <div class="fw-semibold">—</div>
+                    NO PUZZLE
                   {% endif %}
-                  <div class="small text-muted mt-1">
-                    {% for p in row.available_puzzles %}
-                      <span class="badge bg-secondary me-1">{{ p.name }}</span>
-                    {% endfor %}
-                    {% if row.locked_puzzles_count > 0 %}
-                      <span class="badge bg-light text-muted border">{{ row.locked_puzzles_count }} locked</span>
-                    {% endif %}
-                  </div>
-                </td>
-                <td>
+                </div>
+                <div class="eris-puzzle-state">
+                  {% if row.locked_puzzles_count > 0 %}
+                    LOCKED
+                  {% else %}
+                    FLOWING
+                  {% endif %}
+                </div>
+              </div>
+            </section>
+
+            <div class="eris-session-metrics mb-3">
+              <div>
+                <span>Elapsed</span>
+                <strong>
                   {% if row.session.status == 'pending' %}
-                    <span class="badge bg-secondary">Not started</span>
-                  {% elif row.session.status == 'paused' %}
-                    <span class="badge bg-warning text-dark">Paused</span>
+                    --:--
                   {% else %}
-                    {{ row.elapsed_minutes }} min
+                    {{ row.elapsed_minutes }}m
                   {% endif %}
-                </td>
-                <td>{{ row.session.hints_given }}</td>
-                <td>
-                  {% if row.session.status == 'active' %}
-                    {% if rec.action == "hint" %}
-                      <span class="badge bg-danger fs-6">HELP NOW</span>
-                    {% elif rec.action == "monitor" %}
-                      <span class="badge bg-warning text-dark fs-6">WATCH</span>
-                    {% else %}
-                      <span class="badge bg-success fs-6">OK</span>
-                    {% endif %}
-                    <div class="small text-muted mt-1">{{ rec.reason }}</div>
-                  {% elif row.session.status == 'pending' %}
-                    <span class="text-muted small">Start session to see recommendations</span>
-                  {% elif row.session.status == 'paused' %}
-                    <span class="text-muted small">Session paused</span>
-                  {% else %}
-                    <span class="text-muted small">Session ended</span>
-                  {% endif %}
-                </td>
-                <td>
-                  <div class="d-flex gap-1 flex-wrap">
+                </strong>
+              </div>
+              <div>
+                <span>Hint count</span>
+                <strong>{{ row.session.hints_given }}</strong>
+              </div>
+            </div>
 
-                    {% if row.session.status == 'pending' %}
-                      <button class="btn btn-sm btn-success btn-session-action"
-                              data-session-id="{{ row.session.id }}"
-                              data-action="start">
-                        Start
-                      </button>
+            <div class="eris-rec-reason small mb-2">{{ rec.reason|default:"Session awaiting command." }}</div>
 
-                    {% elif row.session.status == 'active' %}
-                      <button class="btn btn-sm btn-outline-warning btn-session-action"
-                              data-session-id="{{ row.session.id }}"
-                              data-action="pause">
-                        Pause
-                      </button>
-                      <button class="btn btn-sm btn-outline-primary btn-give-hint"
-                              data-session-id="{{ row.session.id }}"
-                              {% if rec.action != 'hint' %}style="opacity:0.4"{% endif %}>
-                        Hint
-                      </button>
-                      <button class="btn btn-sm btn-success btn-session-action"
-                              data-session-id="{{ row.session.id }}"
-                              data-action="complete_puzzle">
-                        Puzzle done
-                      </button>
-                      <button class="btn btn-sm btn-outline-danger btn-session-action"
-                              data-session-id="{{ row.session.id }}"
-                              data-action="end"
-                              data-confirm="End session for {{ row.session.team.name }}?">
-                        End
-                      </button>
-
-                    {% elif row.session.status == 'paused' %}
-                      <button class="btn btn-sm btn-success btn-session-action"
-                              data-session-id="{{ row.session.id }}"
-                              data-action="start">
-                        Resume
-                      </button>
-                      <button class="btn btn-sm btn-outline-danger btn-session-action"
-                              data-session-id="{{ row.session.id }}"
-                              data-action="end"
-                              data-confirm="End session for {{ row.session.team.name }}?">
-                        End
-                      </button>
-                    {% endif %}
-
-                  </div>
-                </td>
-              </tr>
-              {% endwith %}
-              {% empty %}
-              <tr>
-                <td colspan="7" class="text-center text-muted py-5">
-                  No sessions yet. <a href="{% url 'setup' %}">Go to Setup</a> to create them.
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+            <div class="eris-session-actions">
+              {% if row.session.status == 'pending' %}
+                <button type="button" class="btn btn-sm btn-success btn-session-action"
+                        data-session-id="{{ row.session.id }}"
+                        data-action="start">
+                  Start
+                </button>
+              {% elif row.session.status == 'active' %}
+                <button type="button" class="btn btn-sm btn-outline-warning btn-session-action"
+                        data-session-id="{{ row.session.id }}"
+                        data-action="pause">
+                  Pause
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-primary btn-give-hint"
+                        data-session-id="{{ row.session.id }}"
+                        {% if rec.action != 'hint' %}style="opacity:0.45"{% endif %}>
+                  Send hint
+                </button>
+                <button type="button" class="btn btn-sm btn-success btn-session-action"
+                        data-session-id="{{ row.session.id }}"
+                        data-action="complete_puzzle">
+                  Puzzle done
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-session-action"
+                        data-session-id="{{ row.session.id }}"
+                        data-action="end"
+                        data-confirm="End session for {{ row.session.team.name }}?">
+                  End
+                </button>
+              {% elif row.session.status == 'paused' %}
+                <button type="button" class="btn btn-sm btn-success btn-session-action"
+                        data-session-id="{{ row.session.id }}"
+                        data-action="start">
+                  Resume
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-session-action"
+                        data-session-id="{{ row.session.id }}"
+                        data-action="end"
+                        data-confirm="End session for {{ row.session.team.name }}?">
+                  End
+                </button>
+              {% endif %}
+            </div>
+          </article>
+          {% endwith %}
+          {% empty %}
+          <div class="text-center text-muted py-5">
+            No sessions yet. <a href="{% url 'setup' %}">Go to Setup</a> to create them.
+          </div>
+          {% endfor %}
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="col-lg-4">
+    <div class="card mt-3">
+      <div class="card-header">Upcoming sessions</div>
+      <div class="card-body small text-muted">
+        Use <a href="{% url 'setup' %}">Setup</a> to preload teams, then monitor on this board.
+      </div>
+    </div>
+  </section>
+
+  <aside class="eris-cp-side">
     <div class="card mb-3">
       <div class="card-header fw-semibold">Fairness snapshot</div>
       <div class="card-body">
@@ -161,7 +164,7 @@
           <li class="d-flex justify-content-between"><span>Avg hints (active)</span> <strong id="fairness-avg-hints">{{ fairness.avg_hints_active }}</strong></li>
           <li class="d-flex justify-content-between"><span>Avg time to 1st hint</span> <strong id="fairness-first-hint">{{ fairness.avg_time_to_first_hint_minutes }} min</strong></li>
         </ul>
-        <div class="fw-semibold small mb-2">Outliers</div>
+        <div class="fw-semibold small mb-2">Outlier detection</div>
         <div id="fairness-outliers">
           {% if fairness_outliers %}
             {% for o in fairness_outliers %}
@@ -175,12 +178,16 @@
         </div>
       </div>
     </div>
+
     <div class="card">
+      <div class="card-header">Tactical log</div>
       <div class="card-body small text-muted">
-        <strong>Demo tip:</strong> Open <a href="{% url 'analytics' %}">Analytics</a> in another tab after seeding data.
+        <div class="mb-2"><strong>[INFO]</strong> Live queue synchronized.</div>
+        <div class="mb-2"><strong>[WARN]</strong> Monitor teams with high hint latency.</div>
+        <div><strong>[SUCCESS]</strong> Session tracking online.</div>
       </div>
     </div>
-  </div>
+  </aside>
 </div>
 {% endblock %}
 

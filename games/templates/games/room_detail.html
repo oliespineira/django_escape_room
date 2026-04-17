@@ -1,6 +1,7 @@
 {% extends "games/base.html" %}
 
 {% block title %}{{ room.name }}{% endblock %}
+{% block body_class %}eris-room-detail{% endblock %}
 
 {% block content %}
 <nav aria-label="breadcrumb" class="mb-3">
@@ -55,10 +56,10 @@
           <strong>{{ p.name }}</strong>
           <div class="small text-muted">
             Order {{ p.order }} ·
-            <span class="badge bg-light text-dark border">{{ p.category }}</span>
+            <span class="badge bg-secondary border">{{ p.category }}</span>
             {% if p.subtype %}<span class="text-muted">{{ p.subtype }}</span>{% endif %} ·
             difficulty {{ p.difficulty }} · expected {{ p.expected_time }}s
-            {% if p.is_parallel %}<span class="badge bg-info text-dark ms-1">parallel</span>{% endif %}
+            {% if p.is_parallel %}<span class="badge bg-info ms-1">parallel</span>{% endif %}
           </div>
         </div>
         <div class="col-md-3 small">
@@ -87,6 +88,6 @@
 </div>
 
 <div class="mt-3">
-  <a href="{% url 'analytics' %}" class="btn btn-outline-secondary btn-sm">All analytics</a>
+  <a href="{% url 'analytics' %}" class="btn btn-outline-primary btn-sm">All analytics</a>
 </div>
 {% endblock %}

@@ -11,12 +11,6 @@
 
   const refreshMs = parseInt(root.dataset.refreshMs || "10000", 10);
 
-  function badgeClass(action) {
-    if (action === "hint") return "badge-rec-hint";
-    if (action === "monitor") return "badge-rec-monitor";
-    return "badge-rec-wait";
-  }
-
   function escapeHtml(s) {
     return String(s)
       .replace(/&/g, "&amp;")
@@ -25,191 +19,182 @@
       .replace(/"/g, "&quot;");
   }
 
-  function renderPuzzleCell(item) {
-    const order = item.current_puzzle_order;
-    const name = item.current_puzzle || "—";
-    const title =
-      order != null && item.current_puzzle
-        ? "#" + order + " - " + escapeHtml(name)
-        : escapeHtml(name);
-    const available = item.available_puzzles || [];
-    const locked = item.locked_puzzles_count || 0;
-    let badges = available
-      .map(function (n) {
-        return '<span class="badge bg-secondary me-1">' + escapeHtml(n) + "</span>";
-      })
-      .join("");
-    if (locked > 0) {
-      badges +=
-        '<span class="badge bg-light text-muted border">' + locked + " locked</span>";
-    }
-    const sub = badges.length ? '<div class="small text-muted mt-1">' + badges + "</div>" : "";
-    return '<div class="fw-semibold">' + title + "</div>" + sub;
-  }
-
-  function renderRow(item) {
+  function renderSessionCard(item) {
     const rec = item.recommendation || {};
     const action = rec.action || "wait";
-    const badge = badgeClass(action);
     const status = item.status || "active";
+    const order = item.current_puzzle_order;
+    const puzzleName = item.current_puzzle || "NO PUZZLE";
+    const puzzleLabel =
+      order != null && item.current_puzzle
+        ? "#" + order + " · " + escapeHtml(puzzleName).toUpperCase()
+        : escapeHtml(puzzleName).toUpperCase();
+    const roomCode = "ROOM_" + String(item.session_id);
 
-    let rowClass = "";
+    let cardClass = "";
     if (status === "active") {
-      if (action === "hint") rowClass = "table-danger";
-      else if (action === "monitor") rowClass = "table-warning";
-      else rowClass = "table-success";
+      if (action === "hint") cardClass = "is-critical";
+      else if (action === "monitor") cardClass = "is-watch";
+      else cardClass = "is-stable";
     } else if (status === "paused") {
-      rowClass = "table-secondary";
+      cardClass = "is-paused";
     } else if (status === "pending") {
-      rowClass = "table-light";
+      cardClass = "is-pending";
     }
 
-    let elapsedCell = item.elapsed_minutes + " min";
+    let elapsedDisplay = String(item.elapsed_minutes) + "m";
     if (status === "pending") {
-      elapsedCell = '<span class="badge bg-secondary">Not started</span>';
-    } else if (status === "paused") {
-      elapsedCell = '<span class="badge bg-warning text-dark">Paused &mdash; ' + item.elapsed_minutes + " min</span>";
+      elapsedDisplay = "--:--";
     }
 
-    let recCell = "";
+    let statusChip = "ENDED";
+    let puzzleState = "FLOWING";
     if (status === "active") {
-      recCell =
-        '<span class="badge ' + badge + ' fs-6">' +
-        (action === "hint" ? "HELP NOW" : action === "monitor" ? "WATCH" : "OK") +
-        "</span>" +
-        '<div class="small text-muted mt-1">' + escapeHtml(rec.reason || "") + "</div>";
-    } else if (status === "pending") {
-      recCell = '<span class="text-muted small">Start session to see recommendations</span>';
+      statusChip = action === "hint" ? "STUCK" : action === "monitor" ? "MONITOR" : "IN_PROGRESS";
+      puzzleState = item.locked_puzzles_count > 0 ? "LOCKED" : "FLOWING";
     } else if (status === "paused") {
-      recCell = '<span class="text-muted small">Session paused</span>';
+      statusChip = "PAUSED";
+      puzzleState = "PAUSED";
+    } else if (status === "pending") {
+      statusChip = "READY";
+      puzzleState = "READY";
     }
 
     let buttons = "";
     if (status === "pending") {
       buttons =
-        '<button class="btn btn-sm btn-success btn-session-action" ' +
+        '<button type="button" class="btn btn-sm btn-success btn-session-action" ' +
         'data-session-id="' + item.session_id + '" data-action="start">Start</button>';
     } else if (status === "active") {
       buttons =
-        '<button class="btn btn-sm btn-outline-warning btn-session-action me-1" ' +
+        '<button type="button" class="btn btn-sm btn-outline-warning btn-session-action me-1" ' +
         'data-session-id="' + item.session_id + '" data-action="pause">Pause</button>' +
-        '<button class="btn btn-sm btn-outline-primary btn-give-hint me-1" ' +
+        '<button type="button" class="btn btn-sm btn-outline-primary btn-give-hint me-1" ' +
         'data-session-id="' + item.session_id + '"' +
-        (action !== "hint" ? ' style="opacity:0.4"' : "") +
-        ">Hint</button>" +
-        '<button class="btn btn-sm btn-success btn-session-action me-1" ' +
+        (action !== "hint" ? ' style="opacity:0.45"' : "") +
+        ">Send hint</button>" +
+        '<button type="button" class="btn btn-sm btn-success btn-session-action me-1" ' +
         'data-session-id="' + item.session_id + '" data-action="complete_puzzle">Puzzle done</button>' +
-        '<button class="btn btn-sm btn-outline-danger btn-session-action" ' +
+        '<button type="button" class="btn btn-sm btn-outline-danger btn-session-action" ' +
         'data-session-id="' + item.session_id + '" data-action="end" ' +
         'data-confirm="End session for ' + escapeHtml(item.team) + '?">End</button>';
     } else if (status === "paused") {
       buttons =
-        '<button class="btn btn-sm btn-success btn-session-action me-1" ' +
+        '<button type="button" class="btn btn-sm btn-success btn-session-action me-1" ' +
         'data-session-id="' + item.session_id + '" data-action="start">Resume</button>' +
-        '<button class="btn btn-sm btn-outline-danger btn-session-action" ' +
+        '<button type="button" class="btn btn-sm btn-outline-danger btn-session-action" ' +
         'data-session-id="' + item.session_id + '" data-action="end" ' +
         'data-confirm="End session for ' + escapeHtml(item.team) + '?">End</button>';
     }
 
     return (
-      '<tr class="' + rowClass + '" data-session-id="' + item.session_id + '">' +
-      '<td><a class="text-decoration-none fw-bold" href="/sessions/' + item.session_id + '/">' +
-      escapeHtml(item.team) + '</a><div class="small text-muted">#' + item.session_id + "</div></td>" +
-      "<td>" + escapeHtml(item.room) + "</td>" +
-      "<td>" + renderPuzzleCell(item) + "</td>" +
-      "<td>" + elapsedCell + "</td>" +
-      "<td>" + item.hints_given + "</td>" +
-      "<td>" + recCell + "</td>" +
-      "<td><div class='d-flex gap-1 flex-wrap'>" + buttons + "</div></td>" +
-      "</tr>"
+      '<article class="eris-session-card ' + cardClass + '" data-session-id="' + item.session_id + '">' +
+      '<header class="d-flex justify-content-between align-items-start mb-3">' +
+      "<div>" +
+      '<div class="eris-room-code">' + roomCode + "</div>" +
+      '<a class="eris-room-name" href="/sessions/' + item.session_id + '/">' + escapeHtml(item.room).toUpperCase() + "</a>" +
+      "</div>" +
+      '<span class="eris-status-chip">' + statusChip + "</span>" +
+      "</header>" +
+      '<section class="eris-session-panel mb-3">' +
+      '<div class="eris-session-panel-row"><span>CURRENT PUZZLE</span><span>STATUS</span></div>' +
+      '<div class="eris-session-panel-values"><div class="eris-puzzle-name">' + puzzleLabel + '</div><div class="eris-puzzle-state">' + puzzleState + "</div></div>" +
+      "</section>" +
+      '<div class="eris-session-metrics mb-3"><div><span>Elapsed</span><strong>' + elapsedDisplay + "</strong></div><div><span>Hint count</span><strong>" + item.hints_given + "</strong></div></div>" +
+      '<div class="eris-rec-reason small mb-2">' + escapeHtml(rec.reason || "Session awaiting command.") + "</div>" +
+      "<div class='eris-session-actions'>" + buttons + "</div>" +
+      "</article>"
     );
   }
 
-  function bindSessionActionButtons(tbody) {
-    if (!tbody) return;
-    tbody.querySelectorAll(".btn-session-action").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        const id = btn.getAttribute("data-session-id");
-        const action = btn.getAttribute("data-action");
-        const confirmMsg = btn.getAttribute("data-confirm");
-        if (confirmMsg && !window.confirm(confirmMsg)) return;
-        let body = {};
-        if (action === "end") {
-          const success = window.confirm("Did the team escape successfully?\n\nOK = Yes\nCancel = No");
-          body = { success: success };
-        }
-        btn.disabled = true;
-        btn.textContent = "...";
-        const actionPath = action.replace(/_/g, "-");
-        fetch("/api/sessions/" + id + "/" + actionPath + "/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCsrfToken(),
-          },
-          body: JSON.stringify(body),
-        })
-          .then(function (r) {
-            if (!r.ok) {
-              return r
-                .json()
-                .catch(function () {
-                  return {};
-                })
-                .then(function (payload) {
-                  throw new Error(payload.detail || "Action failed");
-                });
-            }
-            const contentType = r.headers.get("content-type") || "";
-            if (!contentType.includes("application/json")) return {};
-            return r.json().catch(function () {
+  function submitSessionAction(btn) {
+    const id = btn.getAttribute("data-session-id");
+    const action = btn.getAttribute("data-action");
+    const confirmMsg = btn.getAttribute("data-confirm");
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    let body = {};
+    if (action === "end") {
+      const success = window.confirm("Did the team escape successfully?\n\nOK = Yes\nCancel = No");
+      body = { success: success };
+    }
+    btn.disabled = true;
+    btn.textContent = "...";
+    const actionPath = action.replace(/_/g, "-");
+    fetch("/api/sessions/" + id + "/" + actionPath + "/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCsrfToken(),
+      },
+      body: JSON.stringify(body),
+    })
+      .then(function (r) {
+        if (!r.ok) {
+          return r
+            .json()
+            .catch(function () {
               return {};
+            })
+            .then(function (payload) {
+              throw new Error(payload.detail || "Action failed");
             });
-          })
-          .then(function () {
-            refresh();
-          })
-          .catch(function (err) {
-            btn.disabled = false;
-            btn.classList.add("btn-danger");
-            btn.textContent = err && err.message ? "Error" : "Error";
-            window.setTimeout(function () {
-              btn.classList.remove("btn-danger");
-              btn.textContent = action === "complete_puzzle" ? "Puzzle done" : btn.textContent;
-            }, 1200);
-          });
+        }
+        const contentType = r.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) return {};
+        return r.json().catch(function () {
+          return {};
+        });
+      })
+      .then(function () {
+        refresh();
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        btn.classList.add("btn-danger");
+        btn.textContent = err && err.message ? "Error" : "Error";
       });
-    });
   }
 
-  function bindHintButtons(tbody) {
-    if (!tbody) return;
-    tbody.querySelectorAll(".btn-give-hint").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        const id = btn.getAttribute("data-session-id");
-        btn.disabled = true;
-        fetch("/api/sessions/" + id + "/hint/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCsrfToken(),
-          },
-          body: JSON.stringify({ auto_suggested: true }),
-        })
-          .then(function (r) {
-            if (!r.ok) throw new Error("Hint failed");
-            return r.json();
-          })
-          .then(function () {
-            refresh();
-          })
-          .catch(function () {
-            btn.disabled = false;
-            btn.classList.add("btn-danger");
-            btn.textContent = "Error";
-          });
+  function submitHint(btn) {
+    const id = btn.getAttribute("data-session-id");
+    btn.disabled = true;
+    fetch("/api/sessions/" + id + "/hint/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCsrfToken(),
+      },
+      body: JSON.stringify({ auto_suggested: true }),
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error("Hint failed");
+        return r.json();
+      })
+      .then(function () {
+        refresh();
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.classList.add("btn-danger");
+        btn.textContent = "Error";
       });
+  }
+
+  function bindSessionActionButtons(rootEl) {
+    if (!rootEl) return;
+    if (rootEl.dataset.actionsBound === "1") return;
+    rootEl.addEventListener("click", function (event) {
+      const sessionBtn = event.target.closest(".btn-session-action");
+      if (sessionBtn && rootEl.contains(sessionBtn)) {
+        submitSessionAction(sessionBtn);
+        return;
+      }
+      const hintBtn = event.target.closest(".btn-give-hint");
+      if (hintBtn && rootEl.contains(hintBtn)) {
+        submitHint(hintBtn);
+      }
     });
+    rootEl.dataset.actionsBound = "1";
   }
 
   function renderFairness(fairness, outliersEl) {
@@ -249,20 +234,20 @@
       })
       .then(function (data) {
         if (!data) return;
-        const tbody = document.querySelector("#dashboard-queue-body");
-        if (!tbody) return;
+        const cardsRoot = document.querySelector("#dashboard-session-cards");
+        if (!cardsRoot) return;
         const items = data.queue || [];
-        tbody.innerHTML = items.map(renderRow).join("");
-        bindHintButtons(tbody);
-        bindSessionActionButtons(tbody);
+        cardsRoot.innerHTML = items.length
+          ? items.map(renderSessionCard).join("")
+          : '<div class="text-center text-muted py-5">No sessions yet. <a href="/setup/">Go to Setup</a> to create them.</div>';
+        bindSessionActionButtons(cardsRoot);
         renderFairness(data.fairness, document.getElementById("fairness-outliers"));
       })
       .catch(function () {});
   }
 
-  const tbodyInit = document.querySelector("#dashboard-queue-body");
-  if (tbodyInit) bindHintButtons(tbodyInit);
-  if (tbodyInit) bindSessionActionButtons(tbodyInit);
+  const cardsInit = document.querySelector("#dashboard-session-cards");
+  if (cardsInit) bindSessionActionButtons(cardsInit);
 
   setInterval(refresh, refreshMs);
 })();

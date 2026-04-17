@@ -12,7 +12,7 @@
         <h2 class="h5 card-title">{{ room.name }}</h2>
         <p class="small text-muted mb-2">{{ room.theme }} · {{ room.get_difficulty_display }} · {{ room.max_time }} min</p>
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <span class="small">Balance</span>
+          <span class="small rooms-balance-label">Balance</span>
           <span class="badge text-bg-primary">{{ score.balance_score }}</span>
         </div>
         {% widthratio score.balance_score 1 100 as balance_pct %}
