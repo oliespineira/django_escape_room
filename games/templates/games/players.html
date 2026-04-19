@@ -1,0 +1,326 @@
+{% extends "games/base.html" %}
+
+{% block title %}Players{% endblock %}
+{% block body_class %}eris-players{% endblock %}
+
+{% block extra_head %}
+<style>
+  .modal-eris .modal-content {
+    background: var(--eris-panel, #0d1828);
+    border: 1px solid var(--eris-border, rgba(82, 228, 255, 0.22));
+    color: #e8f0ff;
+  }
+  .modal-eris .modal-header {
+    border-bottom-color: rgba(82, 228, 255, 0.12);
+  }
+  .modal-eris .modal-footer {
+    border-top-color: rgba(82, 228, 255, 0.12);
+  }
+  .modal-eris .btn-close {
+    filter: invert(1) grayscale(100%);
+    opacity: 0.85;
+  }
+  .modal-eris .form-control,
+  .modal-eris .form-select {
+    background: rgba(6, 14, 24, 0.85);
+    border-color: rgba(82, 228, 255, 0.2);
+    color: #e8f0ff;
+  }
+  .hint-radio-card .form-check-input {
+    margin-top: 0.35rem;
+  }
+  .hint-radio-card label {
+    cursor: pointer;
+    border: 1px solid rgba(82, 228, 255, 0.18);
+    border-radius: 0.375rem;
+    padding: 0.65rem 0.75rem;
+    background: rgba(6, 14, 24, 0.5);
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .hint-radio-card .form-check-input:checked + label {
+    border-color: var(--eris-accent, #52e4ff);
+    background: rgba(82, 228, 255, 0.08);
+  }
+  .badge-hint-none {
+    background: rgba(108, 117, 125, 0.35);
+    color: #c8d4e6;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb small mb-0">
+    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Players</li>
+  </ol>
+</nav>
+
+{% if messages %}
+<div class="mb-3">
+  {% for message in messages %}
+  <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'debug' %}secondary{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+  <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-3">
+    <div class="d-flex flex-wrap align-items-center gap-2 flex-grow-1">
+      <span class="fw-semibold">All players</span>
+      <input type="search" id="player-search" class="form-control form-control-sm eris-search"
+             placeholder="Search by name…" style="max-width: 16rem;" autocomplete="off">
+    </div>
+    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createPlayerModal">
+      New player
+    </button>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-eris table-hover mb-0 align-middle">
+        <thead>
+          <tr>
+            <th scope="col" class="text-muted small">ID</th>
+            <th scope="col">Name</th>
+            <th scope="col">Experience</th>
+            <th scope="col">Hint preference</th>
+            <th scope="col">Teams</th>
+            <th scope="col" class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="player-table-body">
+          {% for row in players %}
+          {% with p=row.player %}
+          <tr class="player-row">
+            <td class="text-muted small">{{ p.id }}</td>
+            <td class="player-name-cell fw-medium">{{ p.name }}</td>
+            <td>
+              {% if p.experience_level == 'expert' %}
+              <span class="badge bg-success">Expert</span>
+              {% elif p.experience_level == 'intermediate' %}
+              <span class="badge bg-secondary">Intermediate</span>
+              {% else %}
+              <span class="badge bg-info text-dark">Beginner</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if p.hint_preference == 'frequent' %}
+              <span class="badge bg-danger">Frequent</span>
+              {% elif p.hint_preference == 'normal' %}
+              <span class="badge bg-warning text-dark">Normal</span>
+              {% elif p.hint_preference == 'low' %}
+              <span class="badge bg-secondary">Low</span>
+              {% else %}
+              <span class="badge badge-hint-none">None</span>
+              {% endif %}
+            </td>
+            <td class="small text-muted">
+              {% if row.team_names %}
+                {{ row.team_names|join:", " }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="text-end text-nowrap">
+              <button type="button"
+                      class="btn btn-sm btn-outline-primary edit-player-btn"
+                      data-bs-toggle="modal"
+                      data-bs-target="#editPlayerModal"
+                      data-id="{{ p.id }}"
+                      data-name="{{ p.name|escape }}"
+                      data-exp="{{ p.experience_level }}"
+                      data-hint="{{ p.hint_preference }}">
+                Edit
+              </button>
+              <form method="post" action="{% url 'player_delete' p.id %}" class="d-inline js-player-delete-form">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endwith %}
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">No players yet. Create one with <strong>New player</strong>.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Create -->
+<div class="modal fade modal-eris" id="createPlayerModal" tabindex="-1" aria-labelledby="createPlayerModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{% url 'player_create' %}">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h2 class="modal-title h5" id="createPlayerModalLabel">New player</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="create-name" class="form-label">Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="create-name" name="name" required autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label for="create-exp" class="form-label">Experience level</label>
+            <select class="form-select" id="create-exp" name="experience_level">
+              {% for val, label in exp_choices %}
+              <option value="{{ val }}" {% if val == 'intermediate' %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <div class="form-label mb-2">Hint preference</div>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <div class="form-check hint-radio-card p-0">
+                  <input class="form-check-input position-absolute opacity-0" type="radio" name="hint_preference" id="hint-none" value="none">
+                  <label class="d-block w-100" for="hint-none"><strong>None</strong><br><span class="small text-muted">Prefers no hints</span></label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check hint-radio-card p-0">
+                  <input class="form-check-input position-absolute opacity-0" type="radio" name="hint_preference" id="hint-low" value="low">
+                  <label class="d-block w-100" for="hint-low"><strong>Low</strong><br><span class="small text-muted">Hints only when very stuck</span></label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check hint-radio-card p-0">
+                  <input class="form-check-input position-absolute opacity-0" type="radio" name="hint_preference" id="hint-normal" value="normal" checked>
+                  <label class="d-block w-100" for="hint-normal"><strong>Normal</strong><br><span class="small text-muted">Standard hint cadence</span></label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check hint-radio-card p-0">
+                  <input class="form-check-input position-absolute opacity-0" type="radio" name="hint_preference" id="hint-frequent" value="frequent">
+                  <label class="d-block w-100" for="hint-frequent"><strong>Frequent</strong><br><span class="small text-muted">Appreciates frequent guidance</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit -->
+<div class="modal fade modal-eris" id="editPlayerModal" tabindex="-1" aria-labelledby="editPlayerModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" id="edit-player-form" action="">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h2 class="modal-title h5" id="editPlayerModalLabel">Edit player</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="edit-name" class="form-label">Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="edit-name" name="name" required autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label for="edit-exp" class="form-label">Experience level</label>
+            <select class="form-select" id="edit-exp" name="experience_level">
+              {% for val, label in exp_choices %}
+              <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <div class="form-label mb-2">Hint preference</div>
+            <div class="row g-2" id="edit-hint-radios">
+              <div class="col-md-6">
+                <div class="form-check hint-radio-card p-0">
+                  <input class="form-check-input position-absolute opacity-0 edit-hint-radio" type="radio" name="hint_preference" id="edit-hint-none" value="none">
+                  <label class="d-block w-100" for="edit-hint-none"><strong>None</strong><br><span class="small text-muted">Prefers no hints</span></label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check hint-radio-card p-0">
+                  <input class="form-check-input position-absolute opacity-0 edit-hint-radio" type="radio" name="hint_preference" id="edit-hint-low" value="low">
+                  <label class="d-block w-100" for="edit-hint-low"><strong>Low</strong><br><span class="small text-muted">Hints only when very stuck</span></label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check hint-radio-card p-0">
+                  <input class="form-check-input position-absolute opacity-0 edit-hint-radio" type="radio" name="hint_preference" id="edit-hint-normal" value="normal">
+                  <label class="d-block w-100" for="edit-hint-normal"><strong>Normal</strong><br><span class="small text-muted">Standard hint cadence</span></label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check hint-radio-card p-0">
+                  <input class="form-check-input position-absolute opacity-0 edit-hint-radio" type="radio" name="hint_preference" id="edit-hint-frequent" value="frequent">
+                  <label class="d-block w-100" for="edit-hint-frequent"><strong>Frequent</strong><br><span class="small text-muted">Appreciates frequent guidance</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var editForm = document.getElementById('edit-player-form');
+  var editUrlPlaceholder = "{% url 'player_edit' 999999999 %}";
+  document.querySelectorAll('.edit-player-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-id');
+      var name = btn.getAttribute('data-name') || '';
+      var exp = btn.getAttribute('data-exp') || 'intermediate';
+      var hint = btn.getAttribute('data-hint') || 'normal';
+      if (editForm) {
+        editForm.action = editUrlPlaceholder.replace('999999999', id);
+      }
+      var nameEl = document.getElementById('edit-name');
+      var expEl = document.getElementById('edit-exp');
+      if (nameEl) nameEl.value = name;
+      if (expEl) expEl.value = exp;
+      document.querySelectorAll('.edit-hint-radio').forEach(function (r) {
+        r.checked = r.value === hint;
+      });
+    });
+  });
+
+  var search = document.getElementById('player-search');
+  if (search) {
+    search.addEventListener('input', function () {
+      var q = (search.value || '').trim().toLowerCase();
+      document.querySelectorAll('#player-table-body tr.player-row').forEach(function (tr) {
+        var t = (tr.textContent || '').toLowerCase();
+        tr.style.display = !q || t.indexOf(q) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  document.querySelectorAll('.js-player-delete-form').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      if (!window.confirm('Delete this player? This cannot be undone.')) {
+        e.preventDefault();
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

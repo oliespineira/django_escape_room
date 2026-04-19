@@ -1,6 +1,6 @@
 {% extends "games/base.html" %}
 
-{% block title %}Create Room{% endblock %}
+{% block title %}Edit {{ room.name }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -83,11 +83,15 @@
 <nav aria-label="breadcrumb" class="mb-3">
   <ol class="breadcrumb small mb-0">
     <li class="breadcrumb-item"><a href="{% url 'room_list' %}">Rooms</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Create Room</li>
+    <li class="breadcrumb-item"><a href="{% url 'room_detail' room.pk %}">{{ room.name }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Edit</li>
   </ol>
 </nav>
 
-<h1 class="h3 mb-4">Create Escape Room</h1>
+<h1 class="h3 mb-2">Edit room</h1>
+<p class="text-muted small mb-4">
+  Puzzles removed from this form are deleted. Past session stats tied to those puzzles may be affected.
+</p>
 
 {% if errors %}
 <div class="alert alert-danger">
@@ -99,7 +103,7 @@
 
 <div class="card border-0 shadow-sm">
   <div class="card-body">
-    <form method="post" id="room-create-form">
+    <form method="post" id="room-edit-form" action="{% url 'room_edit' room.pk %}">
       {% csrf_token %}
 
       <div class="row g-3">
@@ -131,19 +135,21 @@
 
       <hr class="my-4">
       <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-        <h5 class="mb-0">Puzzles <span class="text-muted fw-normal small">(add at least one)</span></h5>
+        <h5 class="mb-0">Puzzles <span class="text-muted fw-normal small">(at least one)</span></h5>
         <button type="button" class="btn btn-sm btn-outline-secondary" id="add-puzzle-btn">+ Add puzzle</button>
       </div>
 
       <div id="puzzle-cards"></div>
 
       <div class="d-flex gap-2 mt-4">
-        <button type="submit" class="btn btn-primary">Create room</button>
-        <a href="{% url 'room_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+        <a href="{% url 'room_detail' room.pk %}" class="btn btn-outline-secondary">Cancel</a>
       </div>
     </form>
   </div>
 </div>
+
+{{ initial_puzzles|json_script:"eris-edit-puzzles" }}
 {% endblock %}
 
 {% block extra_js %}
@@ -256,8 +262,10 @@
     });
   }
 
-  function addPuzzle() {
+  function addPuzzle(initial) {
+    initial = initial || {};
     var pi = puzzleIdx++;
+    var pkVal = initial.id != null ? String(initial.id) : '';
     var card = document.createElement('div');
     card.className = 'eris-puzzle-card mb-3';
     card.dataset.pi = String(pi);
@@ -267,14 +275,15 @@
         '<button type="button" class="btn btn-sm btn-outline-danger remove-puzzle-btn">Remove puzzle</button>' +
       '</div>' +
       '<div class="eris-puzzle-body">' +
+        '<input type="hidden" name="puzzle_id" class="eris-puzzle-pk" value="">' +
         '<div class="row g-2 mb-3">' +
           '<div class="col-md-4">' +
             '<label class="form-label small">Name <span class="text-danger">*</span></label>' +
-            '<input type="text" name="puzzle_name" class="form-control form-control-sm" required>' +
+            '<input type="text" name="puzzle_name" class="form-control form-control-sm eris-in-name" required>' +
           '</div>' +
           '<div class="col-md-2">' +
             '<label class="form-label small">Category</label>' +
-            '<select name="puzzle_category" class="form-select form-select-sm">' +
+            '<select name="puzzle_category" class="form-select form-select-sm eris-in-cat">' +
               '<option value="logical">logical</option>' +
               '<option value="physical">physical</option>' +
               '<option value="code">code</option>' +
@@ -283,19 +292,19 @@
           '</div>' +
           '<div class="col-md-2">' +
             '<label class="form-label small">Difficulty (1–10)</label>' +
-            '<input type="number" name="puzzle_difficulty" class="form-control form-control-sm" value="5" min="1" max="10">' +
+            '<input type="number" name="puzzle_difficulty" class="form-control form-control-sm eris-in-diff" value="5" min="1" max="10">' +
           '</div>' +
           '<div class="col-md-2">' +
             '<label class="form-label small">Expected time (min)</label>' +
-            '<input type="number" name="puzzle_expected_time" class="form-control form-control-sm" value="5" min="1">' +
+            '<input type="number" name="puzzle_expected_time" class="form-control form-control-sm eris-in-exp" value="5" min="1">' +
           '</div>' +
           '<div class="col-md-2">' +
             '<label class="form-label small">Subtype</label>' +
-            '<input type="text" name="puzzle_subtype" class="form-control form-control-sm" placeholder="Optional">' +
+            '<input type="text" name="puzzle_subtype" class="form-control form-control-sm eris-in-sub" placeholder="Optional">' +
           '</div>' +
           '<div class="col-12">' +
             '<label class="form-label small">Description</label>' +
-            '<textarea name="puzzle_description" class="form-control form-control-sm" rows="2" placeholder="Short description"></textarea>' +
+            '<textarea name="puzzle_description" class="form-control form-control-sm eris-in-desc" rows="2" placeholder="Short description"></textarea>' +
           '</div>' +
           '<div class="col-12">' +
             '<div class="form-check">' +
@@ -321,15 +330,64 @@
       '</div>';
 
     container.appendChild(card);
+    var pkEl = card.querySelector('.eris-puzzle-pk');
+    if (pkEl) pkEl.value = pkVal;
+
+    if (initial.name) card.querySelector('.eris-in-name').value = initial.name;
+    if (initial.category) card.querySelector('.eris-in-cat').value = initial.category;
+    if (initial.difficulty != null) card.querySelector('.eris-in-diff').value = String(initial.difficulty);
+    if (initial.expected_time_min != null) card.querySelector('.eris-in-exp').value = String(initial.expected_time_min);
+    if (initial.subtype) card.querySelector('.eris-in-sub').value = initial.subtype;
+    if (initial.description) card.querySelector('.eris-in-desc').value = initial.description;
+    if (initial.is_parallel) card.querySelector('.eris-parallel-cb').checked = true;
+
+    var outRows = card.querySelector('.eris-output-rows');
+    var outs = initial.outputs || [];
+    if (outs.length) {
+      outs.forEach(function (o) {
+        appendOutputRow(outRows);
+        var last = outRows.lastElementChild;
+        if (o.label) last.querySelector('.out-label').value = o.label;
+        if (o.output_type) last.querySelector('.out-type').value = o.output_type;
+        if (o.output_value != null) last.querySelector('.out-value').value = o.output_value;
+      });
+    }
+
+    var depRows = card.querySelector('.eris-dep-rows');
+    var deps = initial.dependencies || [];
+    if (deps.length) {
+      deps.forEach(function (d) {
+        appendDepRow(depRows);
+        var last = depRows.lastElementChild;
+        if (d.label) last.querySelector('.dep-label').value = d.label;
+        var sel = last.querySelector('.dep-required');
+        if (sel) sel.value = d.all_required ? '1' : '0';
+      });
+    }
+
     bindCard(card);
     syncPuzzleIndices();
   }
 
   addBtn.addEventListener('click', function () {
-    addPuzzle();
+    addPuzzle({});
   });
 
-  addPuzzle();
+  var raw = document.getElementById('eris-edit-puzzles');
+  var initialList = [];
+  if (raw) {
+    try {
+      initialList = JSON.parse(raw.textContent);
+    } catch (e) {
+      initialList = [];
+    }
+  }
+  container.innerHTML = '';
+  if (initialList && initialList.length) {
+    initialList.forEach(function (p) { addPuzzle(p); });
+  } else {
+    addPuzzle({});
+  }
 })();
 </script>
 {% endblock %}

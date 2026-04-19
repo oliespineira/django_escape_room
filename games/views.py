@@ -1,6 +1,8 @@
 import json
 import logging
 
+from django.contrib import messages
+from django.db.models import Count
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
@@ -451,6 +453,62 @@ def session_detail_view(request, pk):
     })
 
 @login_required
+def player_list_view(request):
+    players = Player.objects.all().order_by('name').prefetch_related('team_set')
+    rows = [
+        {'player': p, 'team_names': list(p.team_set.values_list('name', flat=True))}
+        for p in players
+    ]
+    return render(request, 'games/players.html', {
+        'players': rows,
+        'hint_choices': Player.HINT_CHOICES,
+        'exp_choices': Player.EXPERIENCE_CHOICES,
+    })
+
+
+@login_required
+def player_create_view(request):
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        exp = request.POST.get('experience_level', 'intermediate')
+        hint = request.POST.get('hint_preference', 'normal')
+        if not name:
+            messages.error(request, 'Name is required.')
+        else:
+            Player.objects.create(name=name, experience_level=exp, hint_preference=hint)
+            messages.success(request, f'Player "{name}" created.')
+    return redirect('player_list')
+
+
+@login_required
+def player_edit_view(request, pk):
+    player = get_object_or_404(Player, pk=pk)
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        exp = request.POST.get('experience_level', player.experience_level)
+        hint = request.POST.get('hint_preference', player.hint_preference)
+        if name:
+            player.name = name
+            player.experience_level = exp
+            player.hint_preference = hint
+            player.save()
+            messages.success(request, f'Player "{name}" updated.')
+        else:
+            messages.error(request, 'Name cannot be empty.')
+    return redirect('player_list')
+
+
+@login_required
+def player_delete_view(request, pk):
+    player = get_object_or_404(Player, pk=pk)
+    if request.method == 'POST':
+        name = player.name
+        player.delete()
+        messages.success(request, f'Player "{name}" deleted.')
+    return redirect('player_list')
+
+
+@login_required
 def room_list_view(request):
     engine = AnalyticsEngine()
     rooms = EscapeRoom.objects.all().order_by('name')
@@ -533,6 +591,125 @@ def register_view(request):
     return render(request, 'registration/register.html', {'form': form})
 
 
+def _puzzles_payload_for_room(room):
+    """Serializable puzzle graph for the room edit form (JSON)."""
+    out = []
+    for p in (
+        Puzzle.objects.filter(room=room)
+        .order_by('order')
+        .prefetch_related('outputs', 'dependencies__requires_output')
+    ):
+        out.append({
+            'id': p.id,
+            'name': p.name,
+            'description': p.description,
+            'category': p.category,
+            'subtype': p.subtype or '',
+            'difficulty': p.difficulty,
+            'expected_time_min': max(1, (p.expected_time or 60) // 60),
+            'is_parallel': p.is_parallel,
+            'outputs': [
+                {
+                    'label': o.label,
+                    'output_type': o.output_type,
+                    'output_value': o.output_value,
+                }
+                for o in p.outputs.all()
+            ],
+            'dependencies': [
+                {
+                    'label': (d.requires_output.label or '').strip().lower(),
+                    'all_required': d.all_required,
+                }
+                for d in p.dependencies.all()
+            ],
+        })
+    return out
+
+
+def _apply_puzzle_graph(request, room):
+    """Create/update puzzles, outputs, and dependencies from POST; drop puzzles not in the form."""
+    from .models import PuzzleDependency, PuzzleOutput
+
+    puzzle_names = request.POST.getlist('puzzle_name')
+    puzzle_ids = request.POST.getlist('puzzle_id')
+    puzzle_categories = request.POST.getlist('puzzle_category')
+    puzzle_difficulties = request.POST.getlist('puzzle_difficulty')
+    puzzle_expected = request.POST.getlist('puzzle_expected_time')
+    puzzle_descriptions = request.POST.getlist('puzzle_description')
+    puzzle_subtypes = request.POST.getlist('puzzle_subtype')
+
+    created_or_updated = []
+    created_puzzles = []
+    all_outputs_by_label = {}
+
+    order = 0
+    for i, pname in enumerate(puzzle_names):
+        pname = pname.strip()
+        if not pname:
+            continue
+        order += 1
+        is_parallel = bool(request.POST.get(f'puzzle_is_parallel_{i}'))
+        try:
+            exp_time = int(puzzle_expected[i]) * 60 if i < len(puzzle_expected) else 300
+        except (ValueError, TypeError):
+            exp_time = 300
+
+        pid_raw = puzzle_ids[i].strip() if i < len(puzzle_ids) else ''
+        puzzle = None
+        if pid_raw.isdigit():
+            puzzle = Puzzle.objects.filter(pk=int(pid_raw), room=room).first()
+        if puzzle is not None and puzzle.pk:
+            puzzle.dependencies.all().delete()
+            puzzle.outputs.all().delete()
+        if puzzle is None:
+            puzzle = Puzzle(room=room)
+
+        puzzle.name = pname
+        puzzle.description = puzzle_descriptions[i] if i < len(puzzle_descriptions) else ''
+        puzzle.category = puzzle_categories[i] if i < len(puzzle_categories) else 'logical'
+        puzzle.subtype = puzzle_subtypes[i] if i < len(puzzle_subtypes) else ''
+        puzzle.difficulty = int(puzzle_difficulties[i]) if i < len(puzzle_difficulties) else 5
+        puzzle.expected_time = exp_time
+        puzzle.order = order
+        puzzle.is_parallel = is_parallel
+        puzzle.room = room
+        puzzle.save()
+
+        created_or_updated.append(puzzle)
+        created_puzzles.append((i, puzzle))
+
+        oi = 0
+        while f'puzzle_{i}_output_label_{oi}' in request.POST:
+            label = request.POST.get(f'puzzle_{i}_output_label_{oi}', '').strip()
+            otype = request.POST.get(f'puzzle_{i}_output_type_{oi}', 'code')
+            value = request.POST.get(f'puzzle_{i}_output_value_{oi}', '').strip()
+            if label:
+                output = PuzzleOutput.objects.create(
+                    puzzle=puzzle, output_type=otype,
+                    output_value=value, label=label,
+                )
+                all_outputs_by_label[label.lower()] = output
+            oi += 1
+
+    for i, puzzle in created_puzzles:
+        di = 0
+        while f'puzzle_{i}_dep_label_{di}' in request.POST:
+            dep_label = request.POST.get(f'puzzle_{i}_dep_label_{di}', '').strip().lower()
+            all_required = request.POST.get(f'puzzle_{i}_dep_required_{di}', '1') == '1'
+            if dep_label and dep_label in all_outputs_by_label:
+                PuzzleDependency.objects.get_or_create(
+                    puzzle=puzzle,
+                    requires_output=all_outputs_by_label[dep_label],
+                    defaults={'all_required': all_required},
+                )
+            di += 1
+
+    kept_pks = {p.pk for p in created_or_updated}
+    if kept_pks:
+        Puzzle.objects.filter(room=room).exclude(pk__in=kept_pks).delete()
+
+
 @login_required
 def room_create_view(request):
     if request.method == 'POST':
@@ -543,18 +720,13 @@ def room_create_view(request):
         theme = request.POST.get('theme', '').strip()
 
         puzzle_names = request.POST.getlist('puzzle_name')
-        puzzle_categories = request.POST.getlist('puzzle_category')
-        puzzle_difficulties = request.POST.getlist('puzzle_difficulty')
-        puzzle_expected_times = request.POST.getlist('puzzle_expected_time')
-        puzzle_descriptions = request.POST.getlist('puzzle_description')
 
         errors = []
         if not name:
             errors.append('Room name is required.')
         if not theme:
             errors.append('Theme is required.')
-        valid_puzzles = [n.strip() for n in puzzle_names if n.strip()]
-        if not valid_puzzles:
+        if not [n.strip() for n in puzzle_names if n.strip()]:
             errors.append('Add at least one puzzle.')
 
         if errors:
@@ -567,26 +739,10 @@ def room_create_view(request):
             })
 
         room = EscapeRoom.objects.create(
-            name=name,
-            description=description,
-            difficulty=difficulty,
-            max_time=int(max_time),
-            theme=theme,
+            name=name, description=description,
+            difficulty=difficulty, max_time=int(max_time), theme=theme,
         )
-
-        for i, pname in enumerate(puzzle_names):
-            pname = pname.strip()
-            if not pname:
-                continue
-            Puzzle.objects.create(
-                room=room,
-                name=pname,
-                description=(puzzle_descriptions[i] if i < len(puzzle_descriptions) else ''),
-                category=(puzzle_categories[i] if i < len(puzzle_categories) else 'logical'),
-                difficulty=int(puzzle_difficulties[i]) if i < len(puzzle_difficulties) else 5,
-                expected_time=int(puzzle_expected_times[i]) if i < len(puzzle_expected_times) else 5,
-                order=i + 1,
-            )
+        _apply_puzzle_graph(request, room)
 
         return redirect('room_detail', pk=room.pk)
 
@@ -594,9 +750,121 @@ def room_create_view(request):
 
 
 @login_required
+def room_edit_view(request, pk):
+    room = get_object_or_404(EscapeRoom, pk=pk)
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        difficulty = request.POST.get('difficulty', 'medium')
+        max_time = request.POST.get('max_time', '60')
+        theme = request.POST.get('theme', '').strip()
+        puzzle_names = request.POST.getlist('puzzle_name')
+
+        errors = []
+        if not name:
+            errors.append('Room name is required.')
+        if not theme:
+            errors.append('Theme is required.')
+        if not [n.strip() for n in puzzle_names if n.strip()]:
+            errors.append('Add at least one puzzle.')
+
+        if errors:
+            return render(request, 'games/room_edit.html', {
+                'room': room,
+                'errors': errors,
+                'form_data': {
+                    'name': name, 'description': description,
+                    'difficulty': difficulty, 'max_time': max_time, 'theme': theme,
+                },
+                'initial_puzzles': _puzzles_payload_for_room(room),
+            })
+
+        room.name = name
+        room.description = description
+        room.difficulty = difficulty
+        room.max_time = int(max_time)
+        room.theme = theme
+        room.save()
+
+        _apply_puzzle_graph(request, room)
+        messages.success(request, f'Room "{room.name}" updated.')
+        return redirect('room_detail', pk=room.pk)
+
+    return render(request, 'games/room_edit.html', {
+        'room': room,
+        'form_data': {
+            'name': room.name,
+            'description': room.description,
+            'difficulty': room.difficulty,
+            'max_time': str(room.max_time),
+            'theme': room.theme,
+        },
+        'initial_puzzles': _puzzles_payload_for_room(room),
+    })
+
+
+def _add_players_to_team_from_setup(team, room_id, request):
+    """Attach selected existing players and new lines (create or match by name) to team."""
+    for pid in request.POST.getlist(f'player_ids_{room_id}'):
+        try:
+            team.players.add(Player.objects.get(pk=int(pid)))
+        except (ValueError, Player.DoesNotExist):
+            continue
+
+    raw = request.POST.get(f'players_{room_id}', '')
+    for line in raw.splitlines():
+        name = line.strip()
+        if not name:
+            continue
+        existing = Player.objects.filter(name__iexact=name).first()
+        if existing:
+            team.players.add(existing)
+        else:
+            team.players.add(
+                Player.objects.create(
+                    name=name,
+                    experience_level='intermediate',
+                    hint_preference='normal',
+                )
+            )
+
+
+@login_required
 def setup_view(request):
-    """GM setup page — create teams and assign them to rooms before starting."""
+    """GM setup page — assign teams (new or existing) to rooms before starting."""
     rooms = EscapeRoom.objects.all().order_by('name')
+    teams = (
+        Team.objects.annotate(player_count=Count('players'))
+        .order_by('name')
+        .prefetch_related('players')
+    )
+    all_players = Player.objects.all().order_by('name')
+
+    def setup_state_for_room(room, post=None):
+        rid = str(room.id)
+        default_source = 'existing' if teams.exists() else 'new'
+        st = {
+            'team_source': default_source,
+            'team_name': '',
+            'existing_team': '',
+            'players_text': '',
+            'player_ids': [],
+        }
+        if post is not None:
+            st['team_source'] = post.get(f'team_source_{rid}', default_source)
+            if not teams.exists():
+                st['team_source'] = 'new'
+            st['team_name'] = post.get(f'team_name_{rid}', '')
+            st['existing_team'] = post.get(f'existing_team_{rid}', '')
+            st['players_text'] = post.get(f'players_{rid}', '')
+            st['player_ids'] = post.getlist(f'player_ids_{rid}')
+        return st
+
+    room_rows = [
+        {'room': r, 'setup': setup_state_for_room(r, request.POST if request.method == 'POST' else None)}
+        for r in rooms
+    ]
 
     if request.method == 'POST':
         selected_room_ids = request.POST.getlist('rooms')
@@ -605,32 +873,35 @@ def setup_view(request):
         for room_id in selected_room_ids:
             try:
                 room = EscapeRoom.objects.get(pk=room_id)
-            except EscapeRoom.DoesNotExist:
+            except (EscapeRoom.DoesNotExist, ValueError):
                 continue
 
-            team_name = request.POST.get(f'team_name_{room_id}', '').strip()
-            player_names_raw = request.POST.get(f'players_{room_id}', '').strip()
+            rid = str(room.id)
+            team_source = request.POST.get(f'team_source_{rid}', 'new')
+            if not teams.exists():
+                team_source = 'new'
 
-            if not team_name:
-                errors.append(f'Room "{room.name}" needs a team name.')
-                continue
+            team = None
+            if team_source == 'existing':
+                tid = request.POST.get(f'existing_team_{rid}', '').strip()
+                if not tid.isdigit():
+                    errors.append(f'Room "{room.name}": choose an existing team.')
+                    continue
+                team = Team.objects.filter(pk=int(tid)).first()
+                if not team:
+                    errors.append(f'Room "{room.name}": team not found.')
+                    continue
+            else:
+                team_name = request.POST.get(f'team_name_{rid}', '').strip()
+                if not team_name:
+                    errors.append(
+                        f'Room "{room.name}": enter a new team name or select an existing team.'
+                    )
+                    continue
+                team = Team.objects.create(name=team_name)
 
-            # Create team
-            team = Team.objects.create(name=team_name)
+            _add_players_to_team_from_setup(team, rid, request)
 
-            # Create players — one name per line
-            if player_names_raw:
-                for line in player_names_raw.splitlines():
-                    name = line.strip()
-                    if name:
-                        player = Player.objects.create(
-                            name=name,
-                            experience_level='intermediate',
-                            hint_preference='normal',
-                        )
-                        team.players.add(player)
-
-            # Create session — pending, not started yet
             GameSession.objects.create(
                 team=team,
                 room=room,
@@ -639,10 +910,18 @@ def setup_view(request):
 
         if errors:
             return render(request, 'games/setup.html', {
-                'rooms': rooms,
+                'room_rows': room_rows,
+                'teams': teams,
+                'all_players': all_players,
                 'errors': errors,
+                'posted_room_ids': [int(x) for x in selected_room_ids if str(x).isdigit()],
             })
 
         return redirect('dashboard')
 
-    return render(request, 'games/setup.html', {'rooms': rooms})
+    return render(request, 'games/setup.html', {
+        'room_rows': room_rows,
+        'teams': teams,
+        'all_players': all_players,
+        'posted_room_ids': [],
+    })

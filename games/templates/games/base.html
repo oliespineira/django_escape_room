@@ -22,11 +22,14 @@
           <li class="nav-item">
             <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active fw-bold{% endif %}"
                href="{% url 'dashboard' %}">GM Dashboard</a>
-
+          </li>
           <li class="nav-item">
             <a class="nav-link {% if request.resolver_match.url_name == 'setup' %}active fw-bold{% endif %}"
               href="{% url 'setup' %}">Setup</a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'player_list' %}active fw-bold{% endif %}"
+               href="{% url 'player_list' %}">Players</a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% if request.resolver_match.url_name == 'analytics' %}active fw-bold{% endif %}"
@@ -83,6 +86,9 @@
         </li>
         <li class="{% if request.resolver_match.url_name == 'setup' %}active{% endif %}">
           <a href="{% url 'setup' %}">Session setup</a>
+        </li>
+        <li class="{% if request.resolver_match.url_name == 'player_list' %}active{% endif %}">
+          <a href="{% url 'player_list' %}">Players</a>
         </li>
         <li class="{% if request.resolver_match.url_name == 'analytics' %}active{% endif %}">
           <a href="{% url 'analytics' %}">Tactical analytics</a>

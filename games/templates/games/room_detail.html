@@ -22,6 +22,11 @@
   </div>
 </div>
 
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <h2 class="h6 mb-0 text-muted text-uppercase small">Room analytics</h2>
+  <a href="{% url 'room_edit' room.pk %}" class="btn btn-primary btn-sm">Edit room</a>
+</div>
+
 {% if perf %}
 <div class="row g-3 mb-4">
   <div class="col-md-4">
