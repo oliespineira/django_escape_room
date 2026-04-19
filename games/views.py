@@ -1,15 +1,15 @@
 import json
 import logging
 
+from django.contrib.auth import login as auth_login
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, render, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth import views as auth_views
 
 from .intelligence import (
     FairnessEngine,
@@ -517,6 +517,81 @@ def simulation_view(request):
         'selected_team_id': selected_team_id,
         'selected_strategy': selected_strategy or 'balanced',
     })
+
+from django.contrib.auth.decorators import login_not_required
+
+@login_not_required
+def register_view(request):
+    if request.method == 'POST':
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            auth_login(request, user)
+            return redirect('dashboard')
+    else:
+        form = UserCreationForm()
+    return render(request, 'registration/register.html', {'form': form})
+
+
+@login_required
+def room_create_view(request):
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        difficulty = request.POST.get('difficulty', 'medium')
+        max_time = request.POST.get('max_time', '60')
+        theme = request.POST.get('theme', '').strip()
+
+        puzzle_names = request.POST.getlist('puzzle_name')
+        puzzle_categories = request.POST.getlist('puzzle_category')
+        puzzle_difficulties = request.POST.getlist('puzzle_difficulty')
+        puzzle_expected_times = request.POST.getlist('puzzle_expected_time')
+        puzzle_descriptions = request.POST.getlist('puzzle_description')
+
+        errors = []
+        if not name:
+            errors.append('Room name is required.')
+        if not theme:
+            errors.append('Theme is required.')
+        valid_puzzles = [n.strip() for n in puzzle_names if n.strip()]
+        if not valid_puzzles:
+            errors.append('Add at least one puzzle.')
+
+        if errors:
+            return render(request, 'games/room_create.html', {
+                'errors': errors,
+                'form_data': {
+                    'name': name, 'description': description,
+                    'difficulty': difficulty, 'max_time': max_time, 'theme': theme,
+                },
+            })
+
+        room = EscapeRoom.objects.create(
+            name=name,
+            description=description,
+            difficulty=difficulty,
+            max_time=int(max_time),
+            theme=theme,
+        )
+
+        for i, pname in enumerate(puzzle_names):
+            pname = pname.strip()
+            if not pname:
+                continue
+            Puzzle.objects.create(
+                room=room,
+                name=pname,
+                description=(puzzle_descriptions[i] if i < len(puzzle_descriptions) else ''),
+                category=(puzzle_categories[i] if i < len(puzzle_categories) else 'logical'),
+                difficulty=int(puzzle_difficulties[i]) if i < len(puzzle_difficulties) else 5,
+                expected_time=int(puzzle_expected_times[i]) if i < len(puzzle_expected_times) else 5,
+                order=i + 1,
+            )
+
+        return redirect('room_detail', pk=room.pk)
+
+    return render(request, 'games/room_create.html', {})
+
 
 @login_required
 def setup_view(request):

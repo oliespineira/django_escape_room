@@ -1,0 +1,134 @@
+{% extends "games/base.html" %}
+
+{% block title %}Create Room{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb small mb-0">
+    <li class="breadcrumb-item"><a href="{% url 'room_list' %}">Rooms</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Create Room</li>
+  </ol>
+</nav>
+
+<h1 class="h3 mb-4">Create Escape Room</h1>
+
+{% if errors %}
+<div class="alert alert-danger">
+  {% for e in errors %}
+  <div>{{ e }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="name" class="form-label">Room name</label>
+          <input type="text" name="name" id="name" class="form-control" value="{{ form_data.name|default:'' }}" required>
+        </div>
+        <div class="col-md-3">
+          <label for="difficulty" class="form-label">Difficulty</label>
+          <select name="difficulty" id="difficulty" class="form-select" required>
+            <option value="easy" {% if form_data.difficulty == 'easy' %}selected{% endif %}>Easy</option>
+            <option value="medium" {% if form_data.difficulty == 'medium' or not form_data %}selected{% endif %}>Medium</option>
+            <option value="hard" {% if form_data.difficulty == 'hard' %}selected{% endif %}>Hard</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label for="max_time" class="form-label">Time limit (minutes)</label>
+          <input type="number" name="max_time" id="max_time" class="form-control" value="{{ form_data.max_time|default:'60' }}" min="5" max="180" required>
+        </div>
+        <div class="col-md-6">
+          <label for="theme" class="form-label">Theme</label>
+          <input type="text" name="theme" id="theme" class="form-control" value="{{ form_data.theme|default:'' }}" placeholder="e.g. Pirate, Space, Horror" required>
+        </div>
+        <div class="col-12">
+          <label for="description" class="form-label">Description</label>
+          <textarea name="description" id="description" class="form-control" rows="3" required>{{ form_data.description|default:'' }}</textarea>
+        </div>
+      </div>
+
+      <hr class="my-4">
+      <h5 class="mb-3">Puzzles <span class="text-muted fw-normal small">(add at least one)</span></h5>
+
+      <div id="puzzle-rows">
+        <div class="puzzle-row card card-body bg-body-secondary mb-3">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label small">Puzzle name</label>
+              <input type="text" name="puzzle_name" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">Category</label>
+              <select name="puzzle_category" class="form-select form-select-sm">
+                <option value="logical">Logical</option>
+                <option value="physical">Physical</option>
+                <option value="code">Code-breaking</option>
+                <option value="search">Search</option>
+              </select>
+            </div>
+            <div class="col-md-1">
+              <label class="form-label small">Difficulty</label>
+              <input type="number" name="puzzle_difficulty" class="form-control form-control-sm" value="5" min="1" max="10">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">Expected time (min)</label>
+              <input type="number" name="puzzle_expected_time" class="form-control form-control-sm" value="5" min="1">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">Description</label>
+              <input type="text" name="puzzle_description" class="form-control form-control-sm" placeholder="Short description">
+            </div>
+            <div class="col-md-1 text-end">
+              <button type="button" class="btn btn-sm btn-outline-danger remove-puzzle" title="Remove">&times;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-sm btn-outline-secondary mb-4" id="add-puzzle-btn">+ Add puzzle</button>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Create room</button>
+        <a href="{% url 'room_list' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var container = document.getElementById("puzzle-rows");
+  var addBtn = document.getElementById("add-puzzle-btn");
+  if (!container || !addBtn) return;
+
+  var template = container.querySelector(".puzzle-row").cloneNode(true);
+
+  addBtn.addEventListener("click", function () {
+    var row = template.cloneNode(true);
+    row.querySelectorAll("input[type=text], textarea").forEach(function (el) { el.value = ""; });
+    row.querySelector("input[name=puzzle_difficulty]").value = "5";
+    row.querySelector("input[name=puzzle_expected_time]").value = "5";
+    container.appendChild(row);
+    bindRemove();
+  });
+
+  function bindRemove() {
+    container.querySelectorAll(".remove-puzzle").forEach(function (btn) {
+      btn.onclick = function () {
+        if (container.querySelectorAll(".puzzle-row").length > 1) {
+          btn.closest(".puzzle-row").remove();
+        }
+      };
+    });
+  }
+  bindRemove();
+})();
+</script>
+{% endblock %}

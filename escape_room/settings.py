@@ -61,7 +61,7 @@ ROOT_URLCONF = 'escape_room.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'games' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

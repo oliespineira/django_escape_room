@@ -3,7 +3,10 @@
 {% block title %}Rooms{% endblock %}
 
 {% block content %}
-<h1 class="h3 mb-3">Rooms</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Rooms</h1>
+  <a href="{% url 'room_create' %}" class="btn btn-primary btn-sm">+ Create Room</a>
+</div>
 <div class="row g-3">
   {% for room, score in rooms_with_scores %}
   <div class="col-md-6 col-xl-4">
