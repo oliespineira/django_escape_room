@@ -97,7 +97,7 @@
           {% with p=row.player %}
           <tr class="player-row">
             <td class="text-muted small">{{ p.id }}</td>
-            <td class="player-name-cell fw-medium">{{ p.name }}</td>
+            <td class="small text-muted">{{ p.name }}</td>
             <td>
               {% if p.experience_level == 'expert' %}
               <span class="badge bg-success">Expert</span>
