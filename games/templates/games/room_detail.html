@@ -92,7 +92,106 @@
   </ul>
 </div>
 
+<div class="card mt-3">
+  <div class="card-header fw-semibold">AI Room Analyst</div>
+  <div class="card-body">
+    <button
+      id="ai-analysis-btn"
+      type="button"
+      class="btn btn-outline-primary btn-sm"
+      data-room-id="{{ room.pk }}"
+    >
+      Generate Analysis
+    </button>
+    <div id="ai-analysis-spinner" class="mt-3 d-none" aria-live="polite">
+      <div class="spinner-border spinner-border-sm text-info me-2" role="status" aria-hidden="true"></div>
+      <span class="small text-muted">Generating analysis...</span>
+    </div>
+    <div
+      id="ai-analysis-output"
+      class="mt-3 d-none"
+      style="white-space: pre-wrap; background: rgba(6,14,24,0.88); color: #e2fbff; padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(82,228,255,0.18);"
+    ></div>
+  </div>
+</div>
+
 <div class="mt-3">
   <a href="{% url 'analytics' %}" class="btn btn-outline-primary btn-sm">All analytics</a>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const button = document.getElementById("ai-analysis-btn");
+    const output = document.getElementById("ai-analysis-output");
+    const spinner = document.getElementById("ai-analysis-spinner");
+    if (!button || !output || !spinner) return;
+
+    const roomId = button.dataset.roomId;
+
+    function getCsrfToken() {
+      const cookie = document.cookie
+        .split(";")
+        .map((value) => value.trim())
+        .find((value) => value.startsWith("csrftoken="));
+      return cookie ? decodeURIComponent(cookie.split("=")[1]) : "";
+    }
+
+    function normalizeAnalysisText(rawText) {
+      return rawText
+        .replace(/\r\n/g, "\n")
+        .replace(/^#{1,6}\s*/gm, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/\*(.*?)\*/g, "$1")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/^\s*[-*]\s+/gm, "• ")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      spinner.classList.remove("d-none");
+      output.classList.add("d-none");
+      output.style.color = "#e2fbff";
+      output.textContent = "";
+
+      try {
+        const response = await fetch(`/api/rooms/${roomId}/analyze/`, {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCsrfToken(),
+          },
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error("Unable to generate analysis right now.");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        output.classList.remove("d-none");
+        let rawText = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          rawText += decoder.decode(value, { stream: true });
+          output.textContent = normalizeAnalysisText(rawText);
+        }
+        rawText += decoder.decode();
+        output.textContent = normalizeAnalysisText(rawText);
+        button.textContent = "Regenerate";
+      } catch (error) {
+        output.classList.remove("d-none");
+        output.style.color = "#ff6b6b";
+        output.textContent = error.message || "Failed to generate analysis.";
+      } finally {
+        spinner.classList.add("d-none");
+        button.disabled = false;
+      }
+    });
+  })();
+</script>
 {% endblock %}

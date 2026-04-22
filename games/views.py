@@ -1,14 +1,17 @@
 import json
 import logging
 
+import httpx
 from django.contrib import messages
 from django.db.models import Count
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
-from django.http import JsonResponse
+from django.conf import settings
+from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from openai import OpenAI
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -543,6 +546,104 @@ def room_detail_view(request, pk):
         'puzzle_rows': puzzle_rows,
         'balance': engine.game_balance_score(room),
     })
+
+
+@login_required
+def analyze_room_view(request, pk):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    room = get_object_or_404(EscapeRoom, pk=pk)
+    engine = AnalyticsEngine()
+
+    try:
+        if not settings.OPENAI_API_KEY:
+            raise ValueError('OPENAI_API_KEY is not configured.')
+
+        balance = engine.game_balance_score(room)
+        room_rows = {r['room_id']: r for r in engine.room_performance()}
+        room_perf = room_rows.get(room.id, {})
+
+        room_puzzles = list(Puzzle.objects.filter(room=room).values('id', 'order', 'category'))
+        room_puzzle_ids = {p['id'] for p in room_puzzles}
+        puzzle_meta = {
+            p['id']: {'order': p['order'] or 0, 'category': p['category'] or ''}
+            for p in room_puzzles
+        }
+        puzzle_report = [
+            p for p in engine.puzzle_difficulty_report()
+            if p['puzzle_id'] in room_puzzle_ids
+        ]
+        bottlenecks = [
+            b for b in engine.bottleneck_puzzles()
+            if b['puzzle_id'] in room_puzzle_ids
+        ]
+
+        payload = {
+            'room': room.name,
+            'difficulty': room.difficulty,
+            'max_time_minutes': room.max_time,
+            'balance_score': float(balance.get('balance_score', 0.0)),
+            'success_rate': float(room_perf.get('success_rate', balance.get('success_rate', 0.0))),
+            'avg_hints_per_session': float(room_perf.get('avg_hints', balance.get('avg_hints', 0.0))),
+            'duration_std_minutes': float(balance.get('duration_std_minutes', 0.0)),
+            'puzzles': [
+                {
+                    'name': row['puzzle'],
+                    'order': puzzle_meta.get(row['puzzle_id'], {}).get('order', 0),
+                    'category': puzzle_meta.get(row['puzzle_id'], {}).get('category', ''),
+                    'expected_seconds': int(row['expected_seconds']),
+                    'avg_solve_seconds': int(row['avg_solve_seconds']),
+                    'avg_vs_expected_ratio': float(row['avg_vs_expected_ratio']),
+                    'avg_hints': float(row['avg_hints']),
+                    'completion_rate': float(row['completion_rate']),
+                }
+                for row in sorted(
+                    puzzle_report,
+                    key=lambda p: puzzle_meta.get(p['puzzle_id'], {}).get('order', 9999),
+                )
+            ],
+            'hint_timing_buckets': engine.hint_timing_analysis(),
+            'bottleneck_puzzles': [row['puzzle'] for row in bottlenecks[:5]],
+        }
+
+        system_prompt = (
+            'You are an expert escape room design consultant. Analyse the following '
+            'performance data and provide specific, actionable recommendations for the '
+            'Game Master. Focus on: which puzzles are bottlenecks and why, where hint '
+            'distribution suggests design problems, whether the room balance score '
+            'reflects a solvability or variance issue, and 2-3 concrete suggestions to '
+            'improve the overall experience. Be concise and direct. '
+            'Return plain text only: no markdown, no # headings, no bold markers, '
+            'and no code formatting. Use short section titles with normal text and '
+            'simple numbered points.'
+        )
+
+        client = OpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            http_client=httpx.Client(trust_env=False),
+        )
+
+        def stream_chunks():
+            stream = client.chat.completions.create(
+                model='gpt-4o',
+                stream=True,
+                max_tokens=600,
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': json.dumps(payload)},
+                ],
+            )
+            try:
+                for chunk in stream:
+                    yield chunk.choices[0].delta.content or ''
+            finally:
+                stream.close()
+
+        return StreamingHttpResponse(stream_chunks(), content_type='text/plain')
+    except Exception as exc:
+        logger.exception('Failed to analyze room %s with OpenAI: %s', room.id, exc)
+        return JsonResponse({'error': 'Failed to generate AI analysis.'}, status=500)
 
 @login_required
 def simulation_view(request):
