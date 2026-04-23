@@ -31,6 +31,18 @@
     font-weight: 600;
     margin-bottom: 0.5rem;
   }
+  .eris-dep-sec {
+    border: 1px solid rgba(255, 197, 90, 0.28);
+    border-radius: 0.35rem;
+    padding: 0.75rem;
+    background: rgba(6, 14, 24, 0.35);
+  }
+  .eris-dep-sec .eris-sec-title {
+    color: #ffc55a;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
   .eris-mini-btn {
     font-size: 0.75rem;
     padding: 0.2rem 0.55rem;
@@ -44,6 +56,14 @@
   .eris-mini-btn.out:hover {
     background: rgba(70, 236, 255, 0.08);
     color: #7af0ff;
+  }
+  .eris-mini-btn.dep {
+    border: 1px solid rgba(255, 197, 90, 0.45);
+    color: #ffc55a;
+  }
+  .eris-mini-btn.dep:hover {
+    background: rgba(255, 197, 90, 0.08);
+    color: #ffd280;
   }
   .eris-remove-x {
     border: none;
@@ -73,7 +93,7 @@
   Puzzles removed from this form are deleted. Past session stats tied to those puzzles may be affected.
 </p>
 <p class="text-muted small mb-4">
-  <strong>Outputs:</strong> each output needs a <strong>unique label</strong> in this room (case-insensitive).
+  <strong>Outputs / dependencies:</strong> each output needs a <strong>unique label</strong> in this room. A dependency’s “required label” must match a label from a <em>puzzle above</em> in the list (flow order), case-insensitive. Multiple dependencies mean <strong>all</strong> listed outputs must be earned before the puzzle unlocks.
 </p>
 
 {% if errors %}
@@ -161,6 +181,11 @@
         if (otyp) otyp.name = 'puzzle_' + idx + '_output_type_' + oi;
         if (oval) oval.name = 'puzzle_' + idx + '_output_value_' + oi;
       });
+
+      card.querySelectorAll('.eris-dep-row').forEach(function (row, di) {
+        var dl = row.querySelector('.dep-label');
+        if (dl) dl.name = 'puzzle_' + idx + '_dep_label_' + di;
+      });
     });
   }
 
@@ -175,6 +200,11 @@
       appendOutputRow(card.querySelector('.eris-output-rows'));
       syncPuzzleIndices();
     });
+
+    card.querySelector('.add-dep-btn').addEventListener('click', function () {
+      appendDepRow(card.querySelector('.eris-dep-rows'));
+      syncPuzzleIndices();
+    });
   }
 
   function appendOutputRow(rowsEl) {
@@ -183,7 +213,7 @@
     row.innerHTML =
       '<div class="col-md-3">' +
         '<label class="form-label small mb-0">Label</label>' +
-        '<input type="text" class="form-control form-control-sm out-label" placeholder="Unique label">' +
+        '<input type="text" class="form-control form-control-sm out-label" placeholder="Identifier for dependencies">' +
       '</div>' +
       '<div class="col-md-2">' +
         '<label class="form-label small mb-0">Type</label>' +
@@ -203,6 +233,24 @@
       '</div>';
     rowsEl.appendChild(row);
     row.querySelector('.out-remove').addEventListener('click', function () {
+      row.remove();
+      syncPuzzleIndices();
+    });
+  }
+
+  function appendDepRow(rowsEl) {
+    var row = document.createElement('div');
+    row.className = 'eris-dep-row row g-2 align-items-end mb-2';
+    row.innerHTML =
+      '<div class="col-md-10">' +
+        '<label class="form-label small mb-0">input (output from previous puzzle)</label>' +
+        '<input type="text" class="form-control form-control-sm dep-label" placeholder="Must match an output label from another puzzle">' +
+      '</div>' +
+      '<div class="col-md-2 text-end">' +
+        '<button type="button" class="eris-remove-x dep-remove" title="Remove">&times;</button>' +
+      '</div>';
+    rowsEl.appendChild(row);
+    row.querySelector('.dep-remove').addEventListener('click', function () {
       row.remove();
       syncPuzzleIndices();
     });
@@ -266,6 +314,13 @@
           '</div>' +
           '<div class="eris-output-rows"></div>' +
         '</div>' +
+        '<div class="eris-dep-sec">' +
+          '<div class="d-flex justify-content-between align-items-center">' +
+            '<div class="eris-sec-title">Dependencies</div>' +
+            '<button type="button" class="eris-mini-btn dep add-dep-btn" data-pi="' + pi + '">+ Add dependency</button>' +
+          '</div>' +
+          '<div class="eris-dep-rows"></div>' +
+        '</div>' +
       '</div>';
 
     container.appendChild(card);
@@ -289,6 +344,16 @@
         if (o.label) last.querySelector('.out-label').value = o.label;
         if (o.output_type) last.querySelector('.out-type').value = o.output_type;
         if (o.output_value != null) last.querySelector('.out-value').value = o.output_value;
+      });
+    }
+
+    var depRows = card.querySelector('.eris-dep-rows');
+    var deps = initial.dependencies || [];
+    if (deps.length) {
+      deps.forEach(function (d) {
+        appendDepRow(depRows);
+        var last = depRows.lastElementChild;
+        if (d.label) last.querySelector('.dep-label').value = d.label;
       });
     }
 

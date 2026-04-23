@@ -887,7 +887,7 @@ def _puzzles_payload_for_room(room):
     for p in (
         Puzzle.objects.filter(room=room)
         .order_by('order')
-        .prefetch_related('outputs')
+        .prefetch_related('outputs', 'dependencies__requires_output')
     ):
         out.append({
             'id': p.id,
@@ -906,13 +906,19 @@ def _puzzles_payload_for_room(room):
                 }
                 for o in p.outputs.all()
             ],
+            'dependencies': [
+                {
+                    'label': (d.requires_output.label or '').strip().lower(),
+                }
+                for d in p.dependencies.all()
+            ],
         })
     return out
 
 
 def _apply_puzzle_graph(request, room):
-    """Create/update puzzles and outputs from POST; drop puzzles not in the form."""
-    from .models import PuzzleOutput
+    """Create/update puzzles, outputs, and dependencies from POST; drop puzzles not in the form."""
+    from .models import PuzzleDependency, PuzzleOutput
 
     puzzle_names = request.POST.getlist('puzzle_name')
     puzzle_ids = request.POST.getlist('puzzle_id')
@@ -923,6 +929,8 @@ def _apply_puzzle_graph(request, room):
     puzzle_subtypes = request.POST.getlist('puzzle_subtype')
 
     created_or_updated = []
+    created_puzzles = []
+    all_outputs_by_label = {}
 
     order = 0
     for i, pname in enumerate(puzzle_names):
@@ -958,6 +966,7 @@ def _apply_puzzle_graph(request, room):
         puzzle.save()
 
         created_or_updated.append(puzzle)
+        created_puzzles.append((i, puzzle))
 
         oi = 0
         while f'puzzle_{i}_output_label_{oi}' in request.POST:
@@ -965,11 +974,24 @@ def _apply_puzzle_graph(request, room):
             otype = request.POST.get(f'puzzle_{i}_output_type_{oi}', 'code')
             value = request.POST.get(f'puzzle_{i}_output_value_{oi}', '').strip()
             if label:
-                PuzzleOutput.objects.create(
+                output = PuzzleOutput.objects.create(
                     puzzle=puzzle, output_type=otype,
                     output_value=value, label=label,
                 )
+                all_outputs_by_label[label.lower()] = output
             oi += 1
+
+    for i, puzzle in created_puzzles:
+        di = 0
+        while f'puzzle_{i}_dep_label_{di}' in request.POST:
+            dep_label = request.POST.get(f'puzzle_{i}_dep_label_{di}', '').strip().lower()
+            if dep_label and dep_label in all_outputs_by_label:
+                PuzzleDependency.objects.get_or_create(
+                    puzzle=puzzle,
+                    requires_output=all_outputs_by_label[dep_label],
+                    defaults={'all_required': True},
+                )
+            di += 1
 
     kept_pks = {p.pk for p in created_or_updated}
     if kept_pks:
