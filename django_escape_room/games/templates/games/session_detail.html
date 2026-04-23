@@ -115,19 +115,19 @@
   </div>
   <div class="col-lg-5">
     <div class="card">
-      <div class="card-header fw-semibold">Hint events</div>
+      <div class="card-header fw-semibold">Hints sent to team (full text)</div>
       <ul class="list-group list-group-flush small">
         {% for h in summary.hint_events %}
         <li class="list-group-item">
-          <div class="d-flex justify-content-between">
-            <span>{% if h.minute is not None %}+{{ h.minute }}m{% else %}—{% endif %}</span>
+          <div class="d-flex justify-content-between flex-wrap gap-1">
+            <span class="badge text-bg-secondary">{% if h.minute is not None %}+{{ h.minute }}m{% else %}—{% endif %}</span>
             <span class="text-muted">{{ h.puzzle }}</span>
           </div>
-          <div class="mt-1">{{ h.hint_text|default:"—" }}</div>
-          <div class="text-muted mt-1">auto={{ h.auto_suggested|yesno:"yes,no" }} · accepted={{ h.accepted|yesno:"yes,no" }}</div>
+          <p class="mb-0 mt-2 text-break" style="white-space: pre-wrap;">{% if h.hint_text %}{{ h.hint_text }}{% else %}<span class="text-muted">(no text stored)</span>{% endif %}</p>
+          <div class="text-muted mt-2" style="font-size:0.8rem;">auto={{ h.auto_suggested|yesno:"yes,no" }} · accepted={{ h.accepted|yesno:"yes,no" }}{% if h.timestamp %} · {{ h.timestamp }}{% endif %}</div>
         </li>
         {% empty %}
-        <li class="list-group-item text-muted">No hints logged.</li>
+        <li class="list-group-item text-muted">No hints logged yet.</li>
         {% endfor %}
       </ul>
     </div>

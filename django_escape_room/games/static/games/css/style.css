@@ -604,6 +604,67 @@ body.eris-app {
   box-shadow: 0 0 12px currentcolor;
 }
 
+/* Send hint — GM "command" button + modal (DB course demo) */
+.eris-hint-btn {
+  position: relative;
+  transition: box-shadow 0.25s ease, transform 0.12s ease, border-color 0.2s ease;
+  border-color: rgba(70, 236, 255, 0.55) !important;
+  color: var(--eris-accent) !important;
+}
+.eris-hint-btn:hover:not(:disabled) {
+  box-shadow: 0 0 20px rgba(70, 236, 255, 0.38);
+  transform: translateY(-1px);
+}
+.eris-hint-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+.eris-hint-modal-content {
+  background: linear-gradient(165deg, rgba(12, 22, 38, 0.98), rgba(5, 9, 16, 0.99)) !important;
+  backdrop-filter: blur(12px);
+}
+.eris-hint-textarea {
+  min-height: 8rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+.eris-hint-submit-btn {
+  background: linear-gradient(120deg, var(--eris-good), #18c86f) !important;
+  border: none !important;
+  padding: 0.5rem 1.2rem;
+  box-shadow: 0 4px 24px rgba(45, 241, 148, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+.eris-hint-submit-btn:hover:not(:disabled) {
+  box-shadow: 0 6px 32px rgba(45, 241, 148, 0.55);
+  transform: translateY(-1px);
+}
+.eris-hint-submit-btn:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+}
+.eris-hint-btn-icon {
+  display: inline-block;
+}
+.eris-hint-btn-icon::before {
+  content: "\279C";
+  margin-right: 0.4rem;
+  font-weight: bold;
+  opacity: 0.9;
+}
+#eris-hint-toast.eris-hint-toast-pop {
+  animation: erisHintToastIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes erisHintToastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
 @media (max-width: 1280px) {
   .eris-global-shell {
     grid-template-columns: 1fr;

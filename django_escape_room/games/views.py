@@ -1,17 +1,14 @@
 import json
 import logging
 
-import httpx
 from django.contrib import messages
 from django.db.models import Count
 from django.contrib.auth import login as auth_login
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_not_required, login_required
 from django.contrib.auth.forms import UserCreationForm
-from django.conf import settings
 from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from openai import OpenAI
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -43,6 +40,31 @@ from rest_framework.authentication import SessionAuthentication, BasicAuthentica
 logger = logging.getLogger(__name__)
 
 
+def _latest_hint_payload_by_session_ids(session_ids):
+    """Most recent hint with non-empty text per session (for dashboard / queue API)."""
+    if not session_ids:
+        return {}
+    events = (
+        HintEvent.objects.filter(session_id__in=session_ids)
+        .select_related("puzzle")
+        .order_by("session_id", "-timestamp")
+    )
+    out = {}
+    for h in events:
+        if h.session_id in out:
+            continue
+        text = (h.hint_text or "").strip()
+        if not text:
+            continue
+        ts = h.timestamp
+        out[h.session_id] = {
+            "text": text,
+            "puzzle": h.puzzle.name if h.puzzle_id else "",
+            "at": timezone.localtime(ts).strftime("%b %d, %H:%M") if ts else "",
+        }
+    return out
+
+
 class GameSessionViewSet(viewsets.ModelViewSet):
     authentication_classes = [SessionAuthentication, BasicAuthentication]
     permission_classes = [IsAuthenticated]
@@ -65,7 +87,7 @@ class GameSessionViewSet(viewsets.ModelViewSet):
                 {'detail': 'No current puzzle set for this session.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        HintEvent.objects.create(
+        event = HintEvent.objects.create(
             session=session,
             puzzle=puzzle,
             auto_suggested=request.data.get('auto_suggested', False),
@@ -81,7 +103,19 @@ class GameSessionViewSet(viewsets.ModelViewSet):
         if attempt:
             attempt.hints_used += 1
             attempt.save()
-        return Response({'status': 'hint logged'})
+        hint_text = (request.data.get('hint_text') or '')[:2000]
+        return Response(
+            {
+                'status': 'hint logged',
+                'hint_text': hint_text,
+                'hints_given': session.hints_given,
+                'hint_event_id': event.id,
+                'session_id': session.id,
+                'puzzle_id': puzzle.id,
+                'puzzle_name': puzzle.name,
+                'logged_at': event.timestamp.isoformat() if event.timestamp else None,
+            }
+        )
 
     @action(detail=True, methods=['post'])
     def end(self, request, pk=None):
@@ -252,7 +286,9 @@ def queue_view(request):
     manager = QueueManager()
     recommender = HintRecommender()
     fairness = FairnessEngine()
-    ranked = manager.rank_sessions(list(sessions))
+    session_list = list(sessions)
+    hints_map = _latest_hint_payload_by_session_ids([s.id for s in session_list])
+    ranked = manager.rank_sessions(session_list)
     result = []
     for session, score in ranked:
         rec = recommender.suggest_hint(session)
@@ -266,6 +302,7 @@ def queue_view(request):
             'current_puzzle': session.current_puzzle.name if session.current_puzzle else None,
             'current_puzzle_order': session.current_puzzle.order if session.current_puzzle else None,
             'hints_given': session.hints_given,
+            'last_hint': hints_map.get(session.id),
             'priority_score': round(score, 3),
             'recommendation': rec,
             'elapsed_minutes': int(session.elapsed_seconds / 60),
@@ -343,6 +380,10 @@ def _dashboard_queue_context():
 
     available_puzzles = {row['session'].id: row['available_puzzles'] for row in rows}
 
+    hints_map = _latest_hint_payload_by_session_ids([row['session'].id for row in rows])
+    for row in rows:
+        row['last_hint'] = hints_map.get(row['session'].id)
+
     return {
         'queue_rows': rows,
         'available_puzzles': available_puzzles,
@@ -378,7 +419,9 @@ def analytics_view(request):
     team_labels = [f"Size {t['team_size']}" for t in team_sizes]
     team_values = [t['success_rate'] for t in team_sizes]
 
-    return render(request, 'games/analytics.html', {
+    from .llm_client import get_llm_display_info
+
+    context = {
         'puzzle_report': puzzle_report,
         'room_perf': room_perf,
         'team_sizes': team_sizes,
@@ -394,7 +437,9 @@ def analytics_view(request):
         'timing_values_json': json.dumps(timing_values),
         'team_labels_json': json.dumps(team_labels),
         'team_values_json': json.dumps(team_values),
-    })
+    }
+    context.update(get_llm_display_info())
+    return render(request, 'games/analytics.html', context)
 
 @login_required
 def session_detail_view(request, pk):
@@ -557,8 +602,18 @@ def analyze_room_view(request, pk):
     engine = AnalyticsEngine()
 
     try:
-        if not settings.OPENAI_API_KEY:
-            raise ValueError('OPENAI_API_KEY is not configured.')
+        from .llm_client import get_llm_client_and_model, llm_configured, streaming_chat_create
+
+        if not llm_configured():
+            return JsonResponse(
+                {
+                    'error': (
+                        'No API key found. Add OPENROUTER_API_KEY=… to a .env file next to manage.py '
+                        '(or the parent project folder) and restart the server.'
+                    ),
+                },
+                status=503,
+            )
 
         balance = engine.game_balance_score(room)
         room_rows = {r['room_id']: r for r in engine.room_performance()}
@@ -619,31 +674,167 @@ def analyze_room_view(request, pk):
             'simple numbered points.'
         )
 
-        client = OpenAI(
-            api_key=settings.OPENAI_API_KEY,
-            http_client=httpx.Client(trust_env=False),
+        client, model_id = get_llm_client_and_model()
+        # Create stream in the view (not inside the WSGI generator) so auth/API errors
+        # are raised here and can return JSON instead of 200 + broken body.
+        stream = streaming_chat_create(
+            client,
+            model=model_id,
+            max_tokens=600,
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': json.dumps(payload)},
+            ],
         )
 
         def stream_chunks():
-            stream = client.chat.completions.create(
-                model='gpt-4o',
-                stream=True,
-                max_tokens=600,
-                messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': json.dumps(payload)},
-                ],
-            )
             try:
                 for chunk in stream:
+                    if not chunk.choices:
+                        continue
                     yield chunk.choices[0].delta.content or ''
             finally:
                 stream.close()
 
         return StreamingHttpResponse(stream_chunks(), content_type='text/plain')
+    except ValueError as exc:
+        logger.warning('Room %s AI analysis — config: %s', room.id, exc)
+        return JsonResponse({'error': str(exc)}, status=503)
     except Exception as exc:
-        logger.exception('Failed to analyze room %s with OpenAI: %s', room.id, exc)
-        return JsonResponse({'error': 'Failed to generate AI analysis.'}, status=500)
+        from .llm_client import _is_rate_limit_error
+
+        if _is_rate_limit_error(exc):
+            logger.warning('Room %s AI analysis — rate limited: %s', room.id, exc)
+            return JsonResponse(
+                {
+                    'error': (
+                        'Rate limited (HTTP 429). Free OpenRouter models share upstream quotas; '
+                        'wait a few minutes and retry, or set OPENROUTER_MODEL to a different '
+                        ':free model (see openrouter.ai/models). Technical detail: '
+                        + str(exc)[:800]
+                    ),
+                },
+                status=429,
+            )
+        logger.exception('Failed to analyze room %s (LLM): %s', room.id, exc)
+        from django.conf import settings as dj_settings
+        msg = str(exc) if getattr(dj_settings, 'DEBUG', False) else (
+            'AI request failed. Check your API key, model name, and network.'
+        )
+        return JsonResponse({'error': msg}, status=500)
+
+
+@login_required
+def analytics_ai_briefing_view(request):
+    """Stream an LLM summary of fleet-wide post-game analytics (requires API key in env)."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    try:
+        from .llm_client import get_llm_client_and_model, llm_configured, streaming_chat_create
+
+        if not llm_configured():
+            return JsonResponse(
+                {
+                    'error': (
+                        'No API key found. Add OPENROUTER_API_KEY=sk-or-... to a file named .env '
+                        'in the project folder (next to manage.py) or the parent folder, then '
+                        'restart runserver.'
+                    ),
+                },
+                status=503,
+            )
+
+        engine = AnalyticsEngine()
+        balance_rows = [engine.game_balance_score(r) for r in EscapeRoom.objects.all().order_by('name')]
+        puzzle_report = engine.puzzle_difficulty_report()[:20]
+        bottlenecks = engine.bottleneck_puzzles(10)
+        hint_timing = engine.hint_timing_analysis()
+        team_sizes = engine.team_size_analysis()[:8]
+
+        payload = {
+            'room_summaries': [
+                {
+                    'room': b.get('room', ''),
+                    'difficulty': b.get('difficulty', ''),
+                    'sessions': b.get('sessions', 0),
+                    'success_rate': float(b.get('success_rate', 0)),
+                    'avg_hints': float(b.get('avg_hints', 0)),
+                    'balance_score': float(b.get('balance_score', 0)),
+                }
+                for b in balance_rows
+            ],
+            'puzzle_strain': [
+                {
+                    'puzzle': p.get('puzzle', ''),
+                    'room': p.get('room', ''),
+                    'avg_vs_expected_ratio': float(p.get('avg_vs_expected_ratio', 0)),
+                    'avg_hints': float(p.get('avg_hints', 0)),
+                    'completion_rate': float(p.get('completion_rate', 0)),
+                }
+                for p in puzzle_report
+            ],
+            'bottleneck_puzzles': [b.get('puzzle', '') for b in bottlenecks[:8]],
+            'hint_timing_buckets': hint_timing[:20],
+            'team_size_success': team_sizes,
+        }
+
+        system_prompt = (
+            'You are an expert escape room operations analyst. Using ONLY the JSON data provided, '
+            'give a short executive briefing for a Game Master team: 1) which rooms look healthiest vs '
+            'struggling, 2) which puzzles or patterns deserve attention, 3) hint timing / team size '
+            'takeaways, 4) three practical next steps. Be concise. '
+            'Return plain text only: no markdown, no # headings, no bold, no backticks. '
+            'Use short section titles and numbered bullets where helpful.'
+        )
+
+        client, model_id = get_llm_client_and_model()
+        stream = streaming_chat_create(
+            client,
+            model=model_id,
+            max_tokens=700,
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': json.dumps(payload)},
+            ],
+        )
+
+        def stream_chunks():
+            try:
+                for chunk in stream:
+                    if not chunk.choices:
+                        continue
+                    yield chunk.choices[0].delta.content or ''
+            finally:
+                stream.close()
+
+        return StreamingHttpResponse(stream_chunks(), content_type='text/plain')
+    except ValueError as exc:
+        logger.warning('AI briefing — config: %s', exc)
+        return JsonResponse({'error': str(exc)}, status=503)
+    except Exception as exc:
+        from .llm_client import _is_rate_limit_error
+
+        if _is_rate_limit_error(exc):
+            logger.warning('AI briefing — rate limited: %s', exc)
+            return JsonResponse(
+                {
+                    'error': (
+                        'Rate limited (HTTP 429). The free model is busy upstream; the app will retry '
+                        'automatically a few times. If this persists: wait several minutes, or set '
+                        'OPENROUTER_MODEL to another :free model in .env, or add usage at '
+                        'openrouter.ai. Detail: ' + str(exc)[:800]
+                    ),
+                },
+                status=429,
+            )
+        logger.exception('Failed to generate global analytics briefing: %s', exc)
+        from django.conf import settings as dj_settings
+        msg = str(exc) if getattr(dj_settings, 'DEBUG', False) else (
+            'AI briefing failed. Check your API key, OpenRouter credits, model name, and network.'
+        )
+        return JsonResponse({'error': msg}, status=500)
+
 
 @login_required
 def simulation_view(request):
@@ -676,8 +867,6 @@ def simulation_view(request):
         'selected_team_id': selected_team_id,
         'selected_strategy': selected_strategy or 'balanced',
     })
-
-from django.contrib.auth.decorators import login_not_required
 
 @login_not_required
 def register_view(request):

@@ -16,6 +16,16 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Local secrets: .env in repo root and/or next to manage.py; inner file overrides the parent
+try:
+    from dotenv import load_dotenv
+
+    # override=True: values from .env must win over empty/placeholder env vars (Windows, IDE run configs)
+    load_dotenv(BASE_DIR.parent / ".env", override=True)
+    load_dotenv(BASE_DIR / ".env", override=True)
+except ImportError:
+    pass
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -124,4 +134,17 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# AI analytics (https://openrouter.ai — OpenAI-compatible; free tier available)
+OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
+OPENROUTER_BASE_URL = os.environ.get('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
+OPENROUTER_MODEL = os.environ.get(
+    'OPENROUTER_MODEL',
+    'qwen/qwen3-next-80b-a3b-instruct:free',
+)
+OPENROUTER_HTTP_REFERER = os.environ.get('OPENROUTER_HTTP_REFERER', '')
+# Retries when a :free model returns 429 (shared upstream limits)
+OPENROUTER_STREAM_RETRIES = int(os.environ.get('OPENROUTER_STREAM_RETRIES', '4'))
+OPENROUTER_429_BACKOFF = float(os.environ.get('OPENROUTER_429_BACKOFF', '2.5'))
+# Fallback: OpenAI.com directly
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4o')

@@ -1,0 +1,236 @@
+{% extends "games/base.html" %}
+{% load static %}
+
+{% block title %}Analytics{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<h1 class="h3 mb-1">Post-game analytics</h1>
+<p class="text-muted small mb-3">Session data and trends</p>
+
+<div class="card border border-info mb-4">
+  <div class="card-header fw-semibold d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <span>AI fleet briefing</span>
+    {% if llm_configured %}
+    <span class="badge text-bg-success small">Key loaded · {{ llm_backend }} · <span class="font-monospace">{{ llm_model }}</span></span>
+    {% else %}
+    <span class="text-muted small fw-normal">Set <code>OPENROUTER_API_KEY</code> (or <code>OPENAI_API_KEY</code>) in <code>.env</code> and restart the server</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <button type="button" id="analytics-ai-briefing-btn" class="btn btn-outline-primary btn-sm">Generate briefing</button>
+    <div id="analytics-ai-briefing-spinner" class="mt-3 d-none" aria-live="polite">
+      <div class="spinner-border spinner-border-sm text-info me-2" role="status" aria-hidden="true"></div>
+      <span class="small text-muted">Generating…</span>
+    </div>
+    <div id="analytics-ai-briefing-output" class="mt-3 d-none" style="white-space: pre-wrap; background: rgba(6,14,24,0.88); color: #e2fbff; padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(82,228,255,0.18);"></div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-xl-7">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Puzzle difficulty (avg solve vs expected)</div>
+      <div class="card-body">
+        <canvas          id="chart-puzzle-difficulty"
+          data-labels="{{ chart_labels_json|escape }}"
+          data-expected="{{ chart_expected_json|escape }}"
+          data-actual="{{ chart_actual_json|escape }}"
+          height="120"
+        ></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-5">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Success rate by room</div>
+      <div class="card-body">
+        <canvas
+          id="chart-room-success"
+          data-labels="{{ doughnut_labels_json|escape }}"
+          data-values="{{ doughnut_values_json|escape }}"
+          height="200"
+        ></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-xl-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Hint timing (completed sessions)</div>
+      <div class="card-body">
+        <canvas
+          id="chart-hint-timing"
+          data-labels="{{ timing_labels_json|escape }}"
+          data-values="{{ timing_values_json|escape }}"
+          height="100"
+        ></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Success rate by team size</div>
+      <div class="card-body">
+        <canvas
+          id="chart-team-size"
+          data-labels="{{ team_labels_json|escape }}"
+          data-values="{{ team_values_json|escape }}"
+          height="100"
+        ></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-semibold">Bottleneck puzzles</div>
+      <ul class="list-group list-group-flush">
+        {% for p in bottlenecks %}
+        <li class="list-group-item d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-semibold">{{ p.puzzle }}</div>
+            <div class="small text-muted">{{ p.room }} · {{ p.completed_attempts }} completes</div>
+          </div>
+          <div class="text-end small">
+            <div><span class="badge text-bg-danger">{{ p.avg_vs_expected_ratio }}×</span> vs expected</div>
+            <div class="text-muted">avg hints {{ p.avg_hints }}</div>
+          </div>
+        </li>
+        {% empty %}
+        <li class="list-group-item text-muted">No data yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-semibold">Game balance score (0–1)</div>
+      <ul class="list-group list-group-flush">
+        {% for b in balance_scores %}
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="fw-semibold">{{ b.room }}</span>
+            <span class="badge text-bg-primary">{{ b.balance_score }}</span>
+          </div>
+          <div class="progress" style="height: 6px;">
+            {% widthratio b.balance_score 1 100 as balance_pct %}
+            <div class="progress-bar" role="progressbar" style="width: {{ balance_pct }}%;" aria-valuenow="{{ b.balance_score }}" aria-valuemin="0" aria-valuemax="1"></div>
+          </div>
+          <div class="small text-muted mt-1">{{ b.sessions }} sessions · success {{ b.success_rate }} · hints {{ b.avg_hints }}</div>
+        </li>
+        {% empty %}
+        <li class="list-group-item text-muted">No rooms.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'games/js/charts.js' %}"></script>
+<script>
+  (function () {
+    const btn = document.getElementById("analytics-ai-briefing-btn");
+    const out = document.getElementById("analytics-ai-briefing-output");
+    const spin = document.getElementById("analytics-ai-briefing-spinner");
+    if (!btn || !out || !spin) return;
+
+    function getCsrfToken() {
+      const input = document.querySelector("[name=csrfmiddlewaretoken]");
+      if (input && input.value) return input.value;
+      const c = document.cookie.split(";").map((v) => v.trim()).find((v) => v.startsWith("csrftoken="));
+      return c ? decodeURIComponent(c.split("=")[1]) : "";
+    }
+    function normalize(t) {
+      return String(t || "")
+        .replace(/\r\n/g, "\n")
+        .replace(/^#{1,6}\s*/gm, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+    function errorMessageFromResponse(res, textBody) {
+      if (!textBody || !String(textBody).trim()) {
+        return "Request failed (HTTP " + res.status + ").";
+      }
+      try {
+        const j = JSON.parse(textBody);
+        if (j && j.error) return String(j.error);
+        if (j && j.detail) {
+          if (Array.isArray(j.detail)) {
+            return j.detail
+              .map(function (d) {
+                if (!d) return "";
+                if (typeof d === "string") return d;
+                if (d.msg) return d.msg;
+                return JSON.stringify(d);
+              })
+              .filter(Boolean)
+              .join(" ");
+          }
+          return String(j.detail);
+        }
+      } catch (e) {}
+      var stripped = String(textBody).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      if (res.status === 403 || res.status === 401) {
+        return "Access denied (HTTP " + res.status + "). Log in again; if this persists, check CSRF token.";
+      }
+      return "HTTP " + res.status + (stripped ? ": " + stripped.slice(0, 500) : "");
+    }
+    btn.addEventListener("click", async function () {
+      btn.disabled = true;
+      spin.classList.remove("d-none");
+      out.classList.add("d-none");
+      out.textContent = "";
+      out.style.color = "#e2fbff";
+      try {
+        const res = await fetch("{% url 'analytics_ai_briefing' %}", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "X-CSRFToken": getCsrfToken(),
+            Accept: "text/plain, application/json",
+          },
+        });
+        const ct = (res.headers.get("content-type") || "").toLowerCase();
+        if (!res.ok) {
+          const textBody = await res.text();
+          throw new Error(errorMessageFromResponse(res, textBody));
+        }
+        if (ct.indexOf("text/html") >= 0) {
+          await res.text();
+          throw new Error(
+            "The server returned a web page instead of the briefing. Try refreshing the page and logging in again."
+          );
+        }
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        out.classList.remove("d-none");
+        let raw = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          raw += dec.decode(value, { stream: true });
+          out.textContent = normalize(raw);
+        }
+        raw += dec.decode();
+        out.textContent = normalize(raw);
+        btn.textContent = "Regenerate briefing";
+      } catch (e) {
+        out.classList.remove("d-none");
+        out.style.color = "#ff6b6b";
+        out.textContent = (e && e.message) || "Error.";
+      } finally {
+        spin.classList.add("d-none");
+        btn.disabled = false;
+      }
+    });
+  })();
+</script>
+{% endblock %}
